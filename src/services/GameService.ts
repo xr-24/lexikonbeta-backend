@@ -36,6 +36,7 @@ export class GameService {
         tileColor: roomPlayer.color || '#404040',
         isAI: roomPlayer.isAI || false,
         aiPersonality: roomPlayer.aiPersonality,
+        silencedTiles: [],
       };
     });
 
@@ -160,6 +161,11 @@ export class GameService {
     // Validate tile ownership before adding to pending
     if (!this.validateTileOwnership(currentPlayer.id, tile, gameState)) {
       console.warn('Tile ownership validation failed for addPendingTile');
+      return false;
+    }
+
+    if (currentPlayer.silencedTiles && currentPlayer.silencedTiles.includes(tile.id)) {
+      console.warn(`Player ${currentPlayer.id} attempted to use silenced tile ${tile.id}`);
       return false;
     }
 
@@ -539,26 +545,33 @@ export class GameService {
     const gameState = this.games.get(gameId);
     if (!gameState) return;
 
+    // Clear silenced tiles for the player whose turn just ended
+    const clearedPlayers = gameState.players.map((p, index) =>
+      index === gameState.currentPlayerIndex ? { ...p, silencedTiles: [] } : p
+    );
+    const clearedState: GameState = { ...gameState, players: clearedPlayers };
+    this.games.set(gameId, clearedState);
+
     // Reduce intercession cooldowns for all players at the end of each turn
     this.reduceIntercessionCooldowns(gameId);
 
-    let nextPlayerIndex = (gameState.currentPlayerIndex + 1) % gameState.players.length;
+    let nextPlayerIndex = (clearedState.currentPlayerIndex + 1) % clearedState.players.length;
     
     // Skip players who have ended their game
     let attempts = 0;
-    while (gameState.players[nextPlayerIndex]?.hasEndedGame && attempts < gameState.players.length) {
-      nextPlayerIndex = (nextPlayerIndex + 1) % gameState.players.length;
+    while (clearedState.players[nextPlayerIndex]?.hasEndedGame && attempts < clearedState.players.length) {
+      nextPlayerIndex = (nextPlayerIndex + 1) % clearedState.players.length;
       attempts++;
     }
     
     // If all players have ended the game, don't change turn
-    if (attempts >= gameState.players.length) {
+    if (attempts >= clearedState.players.length) {
       this.checkGameEnd(gameId);
       return;
     }
 
-    const nextTurnNumber = nextPlayerIndex < gameState.currentPlayerIndex ? 
-      gameState.turnNumber + 1 : gameState.turnNumber;
+    const nextTurnNumber = nextPlayerIndex < clearedState.currentPlayerIndex ?
+      clearedState.turnNumber + 1 : clearedState.turnNumber;
 
     // Get updated game state after cooldown reduction
     const updatedGameState = this.games.get(gameId);
@@ -1769,7 +1782,7 @@ export class GameService {
   }
 
   // Execute evocation effects that require game state access
-  async executeEvocationEffects(gameId: string, playerId: string, evocationType: string): Promise<{ success: boolean; errors: string[] }> {
+  async executeEvocationEffects(gameId: string, playerId: string, evocationType: string, params?: any): Promise<{ success: boolean; errors: string[] }> {
     const gameState = this.games.get(gameId);
     if (!gameState) {
       return { success: false, errors: ['Game not found'] };
@@ -1790,9 +1803,9 @@ export class GameService {
           }
           const murmurResult = EvocationManager.executeMurmur(opponent);
           if (murmurResult.success) {
+            const updatedOpponent = { ...opponent, silencedTiles: murmurResult.silencedTileIds };
+            this.updatePlayerInGame(gameId, opponent.id, updatedOpponent);
             console.log(`MURMUR evocation: Silenced tiles ${murmurResult.silencedTileIds.join(', ')} for player ${opponent.name}`);
-            // Note: In a full implementation, you'd store silencedTileIds in game state
-            // and check them during tile placement validation
           }
           return { success: murmurResult.success, errors: murmurResult.error ? [murmurResult.error] : [] };
 
@@ -1845,6 +1858,17 @@ export class GameService {
             console.log(`HAAGENTI evocation: Added 3 tiles to ${player.name}'s rack`);
           }
           return { success: haagenResult.success, errors: haagenResult.error ? [haagenResult.error] : [] };
+
+        case 'DANTALION':
+          if (!params || typeof params.sourceTileId !== 'string') {
+            return { success: false, errors: ['No source tile specified'] };
+          }
+          const dupResult = PowerUpManager.executeDuplicate(player, params.sourceTileId);
+          if (dupResult.success) {
+            this.updatePlayerInGame(gameId, playerId, dupResult.updatedPlayer);
+            console.log(`DANTALION evocation: Duplicated tile ${params.sourceTileId} for ${player.name}`);
+          }
+          return { success: dupResult.success, errors: dupResult.error ? [dupResult.error] : [] };
 
         case 'OROBAS':
           // OROBAS allows unlimited tile reuse - this is handled during move validation

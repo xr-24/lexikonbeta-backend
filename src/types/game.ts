@@ -102,6 +102,7 @@ export interface Player {
   // Intercession effects
   samaelDoubleDamage?: boolean;  // Next word deals double damage
   urielProtection?: boolean;     // 50% damage reduction next turn
+  silencedTiles?: string[];      // Tiles locked for current turn
 }
 
 export interface GameState {

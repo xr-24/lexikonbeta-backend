@@ -754,7 +754,7 @@ export function registerGameEvents(socket: Socket, io: Server) {
   });
 
   // Activate evocation
-  socket.on('activate-evocation', async (data: { evocationId: string }) => {
+  socket.on('activate-evocation', async (data: { evocationId: string; params?: any }) => {
     try {
       // Rate limiting
       if (!RateLimiter.checkLimit(socket.id, 'activate-evocation', 2, 5000)) { // 2 per 5 seconds
@@ -829,7 +829,7 @@ export function registerGameEvents(socket: Socket, io: Server) {
           const evocationType = activatedEvocation?.type || 'UNKNOWN';
           
           // Execute evocation-specific effects that require game state access
-          const effectsResult = await gameService.executeEvocationEffects(context.roomId, context.player.id, evocationType);
+          const effectsResult = await gameService.executeEvocationEffects(context.roomId, context.player.id, evocationType, data.params);
           
           if (effectsResult.success) {
             socket.emit('activate-evocation-response', {
