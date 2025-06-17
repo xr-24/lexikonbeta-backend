@@ -116,7 +116,7 @@ export class EvocationManager {
   static activateEvocation(
     player: Player,
     evocationId: string
-  ): { success: boolean; updatedPlayer: Player; activatedEvocation?: Evocation; error?: string } {
+  ): { success: boolean; updatedPlayer: Player; activatedEvocation?: Evocation; error?: string; requiresGameStateUpdate?: boolean; gameStateUpdates?: any } {
     const evocationIndex = player.evocations.findIndex(e => e.id === evocationId);
     
     if (evocationIndex === -1) {
@@ -130,13 +130,38 @@ export class EvocationManager {
     const evocation = player.evocations[evocationIndex];
     const updatedEvocations = player.evocations.filter((_, index) => index !== evocationIndex);
 
+    // Remove evocation from inventory first
+    let updatedPlayer = {
+      ...player,
+      evocations: updatedEvocations
+    };
+
+    // Execute evocation-specific effects that can be handled immediately
+    // Note: Some evocations like MURMUR, AIM, ANDROMALIUS, VALEFOR require game state access
+    // and will be handled by the GameService after this method returns
+    switch (evocation.type) {
+      case 'ASTAROTH':
+        // Add blank tile to rack
+        updatedPlayer = this.addBlankTileToRack(updatedPlayer);
+        break;
+      case 'DANTALION':
+        // For now, we'll need the GameService to handle this since it needs tile selection
+        // This will be handled in the GameService after activation
+        break;
+      case 'FURFUR':
+        // Extra turn - this will be handled by game flow logic
+        break;
+      // Other evocations that need special handling will be processed by GameService
+      default:
+        // Most evocations require game state access and will be handled by GameService
+        break;
+    }
+
     return {
       success: true,
-      updatedPlayer: {
-        ...player,
-        evocations: updatedEvocations
-      },
-      activatedEvocation: evocation
+      updatedPlayer,
+      activatedEvocation: evocation,
+      requiresGameStateUpdate: true
     };
   }
 

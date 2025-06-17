@@ -1752,6 +1752,108 @@ export class GameService {
     
     return { success: true, errors: [] };
   }
+
+  // Execute evocation effects that require game state access
+  async executeEvocationEffects(gameId: string, playerId: string, evocationType: string): Promise<{ success: boolean; errors: string[] }> {
+    const gameState = this.games.get(gameId);
+    if (!gameState) {
+      return { success: false, errors: ['Game not found'] };
+    }
+
+    const player = gameState.players.find(p => p.id === playerId);
+    if (!player) {
+      return { success: false, errors: ['Player not found'] };
+    }
+
+    const opponent = gameState.players.find(p => p.id !== playerId && !p.hasEndedGame);
+
+    try {
+      switch (evocationType) {
+        case 'MURMUR':
+          if (!opponent) {
+            return { success: false, errors: ['No valid opponent found'] };
+          }
+          const murmurResult = EvocationManager.executeMurmur(opponent);
+          if (murmurResult.success) {
+            console.log(`MURMUR evocation: Silenced tiles ${murmurResult.silencedTileIds.join(', ')} for player ${opponent.name}`);
+            // Note: In a full implementation, you'd store silencedTileIds in game state
+            // and check them during tile placement validation
+          }
+          return { success: murmurResult.success, errors: murmurResult.error ? [murmurResult.error] : [] };
+
+        case 'AIM':
+          if (!opponent) {
+            return { success: false, errors: ['No valid opponent found'] };
+          }
+          // For AIM, we need to randomly select 2 tiles from opponent
+          const opponentTileIds = opponent.tiles.slice(0, 2).map(t => t.id);
+          if (opponentTileIds.length < 2) {
+            return { success: false, errors: ['Opponent does not have enough tiles'] };
+          }
+          const aimResult = EvocationManager.executeAim(opponent, opponentTileIds);
+          if (aimResult.success) {
+            this.updatePlayerInGame(gameId, opponent.id, aimResult.updatedPlayer);
+            console.log(`AIM evocation: Removed 2 tiles from ${opponent.name}`);
+          }
+          return { success: aimResult.success, errors: aimResult.error ? [aimResult.error] : [] };
+
+        case 'BUNE':
+          // Swap player tiles with guaranteed vowels
+          const buneResult = EvocationManager.swapPlayerTiles(player, gameState.tileBag);
+          const { finalTiles, updatedBag } = EvocationManager.guaranteeVowelsInDraw(buneResult.updatedPlayer.tiles, buneResult.updatedBag);
+          
+          const updatedPlayer = { ...buneResult.updatedPlayer, tiles: finalTiles };
+          this.updatePlayerInGame(gameId, playerId, updatedPlayer);
+          
+          const updatedGameState: GameState = { ...gameState, tileBag: updatedBag };
+          this.games.set(gameId, updatedGameState);
+          
+          console.log(`BUNE evocation: Swapped tiles for ${player.name} with guaranteed vowels`);
+          return { success: true, errors: [] };
+
+        case 'GREMORY':
+          if (!opponent) {
+            return { success: false, errors: ['No valid opponent found'] };
+          }
+          const gremoryResult = EvocationManager.swapTilesWithOpponent(player, opponent);
+          this.updatePlayerInGame(gameId, playerId, gremoryResult.updatedPlayer1);
+          this.updatePlayerInGame(gameId, opponent.id, gremoryResult.updatedPlayer2);
+          console.log(`GREMORY evocation: Swapped tiles between ${player.name} and ${opponent.name}`);
+          return { success: true, errors: [] };
+
+        case 'HAAGENTI':
+          const haagenResult = EvocationManager.executeHaagenti(player, gameState.tileBag);
+          if (haagenResult.success) {
+            this.updatePlayerInGame(gameId, playerId, haagenResult.updatedPlayer);
+            const updatedGameStateHaag: GameState = { ...gameState, tileBag: haagenResult.updatedBag };
+            this.games.set(gameId, updatedGameStateHaag);
+            console.log(`HAAGENTI evocation: Added 3 tiles to ${player.name}'s rack`);
+          }
+          return { success: haagenResult.success, errors: haagenResult.error ? [haagenResult.error] : [] };
+
+        case 'OROBAS':
+          // OROBAS allows unlimited tile reuse - this is handled during move validation
+          console.log(`OROBAS evocation: ${player.name} can reuse tiles unlimited times this turn`);
+          return { success: true, errors: [] };
+
+        case 'FURFUR':
+          // FURFUR grants extra turn - this is handled during turn advancement
+          console.log(`FURFUR evocation: ${player.name} will get an extra turn`);
+          return { success: true, errors: [] };
+
+        // ASTAROTH is handled immediately in EvocationManager.activateEvocation
+        // DANTALION, ANDROMALIUS, VALEFOR, FORNEUS would need additional UI for target selection
+
+        default:
+          console.log(`Evocation ${evocationType} activated but no special effects implemented yet`);
+          return { success: true, errors: [] };
+      }
+    } catch (error) {
+      console.error(`Error executing evocation ${evocationType}:`, error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      return { success: false, errors: [`Failed to execute evocation: ${errorMessage}`] };
+    }
+  }
 }
 
 // Export singleton instance

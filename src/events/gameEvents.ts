@@ -819,27 +819,37 @@ export function registerGameEvents(socket: Socket, io: Server) {
         const updateResult = gameService.updatePlayerInGame(context.roomId, context.player.id, result.updatedPlayer);
         
         if (updateResult.success) {
-          socket.emit('activate-evocation-response', {
-            success: true,
-            message: 'Evocation activated successfully'
-          });
-          
-          // Broadcast updated game state to all players
-          broadcastGameState(context.roomId);
-          
           // Get evocation type from the activated evocation
           const activatedEvocation = result.activatedEvocation;
           const evocationType = activatedEvocation?.type || 'UNKNOWN';
           
-          // Broadcast evocation activation to all players
-          io.to(context.roomId).emit('evocation-activated', {
-            playerId: context.player.id,
-            playerName: context.player.name,
-            evocationId: data.evocationId,
-            evocationType: evocationType
-          });
+          // Execute evocation-specific effects that require game state access
+          const effectsResult = await gameService.executeEvocationEffects(context.roomId, context.player.id, evocationType);
           
-          console.log(`Player ${context.player.name} activated evocation ${evocationType}`);
+          if (effectsResult.success) {
+            socket.emit('activate-evocation-response', {
+              success: true,
+              message: 'Evocation activated successfully'
+            });
+            
+            // Broadcast updated game state to all players
+            broadcastGameState(context.roomId);
+            
+            // Broadcast evocation activation to all players
+            io.to(context.roomId).emit('evocation-activated', {
+              playerId: context.player.id,
+              playerName: context.player.name,
+              evocationId: data.evocationId,
+              evocationType: evocationType
+            });
+            
+            console.log(`Player ${context.player.name} activated evocation ${evocationType}`);
+          } else {
+            socket.emit('activate-evocation-response', {
+              success: false,
+              error: effectsResult.errors.join(', ') || 'Failed to execute evocation effects'
+            });
+          }
         } else {
           socket.emit('activate-evocation-response', {
             success: false,
