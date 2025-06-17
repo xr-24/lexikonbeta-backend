@@ -749,7 +749,7 @@ export function registerGameEvents(socket: Socket, io: Server) {
   });
 
   // Activate evocation
-  socket.on('activate-evocation', (data: { evocationId: string }) => {
+  socket.on('activate-evocation', async (data: { evocationId: string }) => {
     try {
       // Rate limiting
       if (!RateLimiter.checkLimit(socket.id, 'activate-evocation', 2, 5000)) { // 2 per 5 seconds
@@ -810,20 +810,48 @@ export function registerGameEvents(socket: Socket, io: Server) {
         return;
       }
 
-      // For now, just acknowledge the activation - actual evocation logic will be implemented in Phase 4
-      socket.emit('activate-evocation-response', {
-        success: true,
-        message: 'Evocation activated successfully'
-      });
+      // Execute the evocation through EvocationManager
+      const { EvocationManager } = await import('../services/EvocationManager');
+      const result = EvocationManager.activateEvocation(player, data.evocationId);
       
-      // Broadcast evocation activation to all players
-      io.to(context.roomId).emit('evocation-activated', {
-        playerId: context.player.id,
-        playerName: context.player.name,
-        evocationId: data.evocationId
-      });
-      
-      console.log(`Player ${context.player.name} activated evocation ${data.evocationId}`);
+      if (result.success) {
+        // Update the player in game state through GameService method
+        const updateResult = gameService.updatePlayerInGame(context.roomId, context.player.id, result.updatedPlayer);
+        
+        if (updateResult.success) {
+          socket.emit('activate-evocation-response', {
+            success: true,
+            message: 'Evocation activated successfully'
+          });
+          
+          // Broadcast updated game state to all players
+          broadcastGameState(context.roomId);
+          
+          // Get evocation type from the activated evocation
+          const activatedEvocation = result.activatedEvocation;
+          const evocationType = activatedEvocation?.type || 'UNKNOWN';
+          
+          // Broadcast evocation activation to all players
+          io.to(context.roomId).emit('evocation-activated', {
+            playerId: context.player.id,
+            playerName: context.player.name,
+            evocationId: data.evocationId,
+            evocationType: evocationType
+          });
+          
+          console.log(`Player ${context.player.name} activated evocation ${evocationType}`);
+        } else {
+          socket.emit('activate-evocation-response', {
+            success: false,
+            error: 'Failed to update game state'
+          });
+        }
+      } else {
+        socket.emit('activate-evocation-response', {
+          success: false,
+          error: result.error || 'Failed to activate evocation'
+        });
+      }
     } catch (error) {
       console.error('Error in activate-evocation:', error);
       socket.emit('activate-evocation-response', {

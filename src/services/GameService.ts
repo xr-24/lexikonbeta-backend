@@ -1724,6 +1724,34 @@ export class GameService {
     
     return { success: true, errors: [] };
   }
+
+  // Update player in game state
+  updatePlayerInGame(gameId: string, playerId: string, updatedPlayer: Player): { success: boolean; errors: string[] } {
+    const gameState = this.games.get(gameId);
+    if (!gameState) {
+      return { success: false, errors: ['Game not found'] };
+    }
+
+    const playerExists = gameState.players.find(p => p.id === playerId);
+    if (!playerExists) {
+      return { success: false, errors: ['Player not found in game'] };
+    }
+
+    // Update the specific player in the game state
+    const updatedPlayers = gameState.players.map(p =>
+      p.id === playerId ? updatedPlayer : p
+    );
+
+    const updatedGameState: GameState = {
+      ...gameState,
+      players: updatedPlayers,
+    };
+
+    this.games.set(gameId, updatedGameState);
+    console.log(`Player ${playerId} updated in game ${gameId}`);
+    
+    return { success: true, errors: [] };
+  }
 }
 
 // Export singleton instance
