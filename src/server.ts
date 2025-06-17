@@ -2,7 +2,7 @@ import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
-// Beta deployment trigger - v1.0.1
+// Beta deployment trigger - v1.0.2
 import { registerRoomEvents } from './events/roomEvents';
 import { registerGameEvents } from './events/gameEvents';
 import { dictionaryService } from './services/dictionaryService';
@@ -120,27 +120,29 @@ io.engine.on('connection_error', (err) => {
 
 // Initialize dictionary and AI on startup
 async function initializeServer() {
+  const PORT = process.env.PORT || 3001;
+  
+  // Start server first, then load dictionary
+  server.listen(PORT, () => {
+    console.log(`🚀 Scrabble Backend Server running on port ${PORT}`);
+    console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`🔗 CORS origins: ${JSON.stringify(corsOptions.origin)}`);
+    console.log(`🛡️  Security measures enabled`);
+  });
+
+  // Load dictionary asynchronously after server starts
   try {
     console.log('Loading dictionary...');
     await dictionaryService.loadDictionary();
-    console.log('Dictionary loaded successfully');
+    console.log(`📚 Dictionary loaded successfully with ${dictionaryService.getDictionarySize()} words`);
     
     console.log('🔥 Initializing Quackle GADDAG AI...');
     // QuackleGADDAGAIService initializes automatically in constructor
     console.log('🔥 Quackle GADDAG AI initialized successfully');
-    
-    const PORT = process.env.PORT || 3001;
-    server.listen(PORT, () => {
-      console.log(`🚀 Scrabble Backend Server running on port ${PORT}`);
-      console.log(`📚 Dictionary loaded with ${dictionaryService.getDictionarySize()} words`);
-      console.log(`🧠 GADDAG AI ready for lightning-fast moves`);
-      console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
-      console.log(`🔗 CORS origins: ${JSON.stringify(corsOptions.origin)}`);
-      console.log(`🛡️  Security measures enabled`);
-    });
   } catch (error) {
-    console.error('Failed to initialize server:', error);
-    process.exit(1);
+    console.error('⚠️  Warning: Failed to load dictionary or AI:', error);
+    console.log('🔄 Server will continue running with limited functionality');
+    // Don't exit - let the server run even if dictionary fails
   }
 }
 

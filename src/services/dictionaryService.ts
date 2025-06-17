@@ -16,9 +16,10 @@ class DictionaryService {
     try {
       // Try multiple possible local paths
       const possiblePaths = [
-        path.join(process.cwd(), 'public', 'sowpods.txt'),
+        path.join(__dirname, 'gaddag', 'sowpods.txt'),
+        path.join(process.cwd(), 'dist', 'services', 'gaddag', 'sowpods.txt'),
         path.join(process.cwd(), 'src', 'services', 'gaddag', 'sowpods.txt'),
-        path.join(__dirname, 'gaddag', 'sowpods.txt')
+        path.join(process.cwd(), 'public', 'sowpods.txt')
       ];
       
       for (const localPath of possiblePaths) {
