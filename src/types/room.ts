@@ -7,6 +7,7 @@ export interface Room {
   players: RoomPlayer[];
   gameState?: GameState;
   isStarted: boolean;
+  intercessionSelectionStarted: boolean;
   createdAt: Date;
   maxPlayers: number;
 }
@@ -43,5 +44,6 @@ export interface RoomInfo {
   hostId: string;
   players: RoomPlayer[];
   isStarted: boolean;
+  intercessionSelectionStarted: boolean;
   maxPlayers: number;
 }
