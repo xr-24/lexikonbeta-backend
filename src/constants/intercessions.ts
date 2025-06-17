@@ -28,7 +28,7 @@ export const INTERCESSION_DEFINITIONS: Record<IntercessionsType, Omit<Intercessi
   GABRIEL: {
     type: 'GABRIEL',
     name: 'Insight of Gabriel',
-    description: 'Automatically plays your highest-scoring possible word.',
+    description: 'Automatically plays your highest-scoring possible word, or deals 30 damage if no word is found.',
     cooldown: 5
   },
   METATRON: {
