@@ -546,6 +546,31 @@ export class GameService {
     const gameState = this.games.get(gameId);
     if (!gameState) return;
 
+    const currentPlayer = gameState.players[gameState.currentPlayerIndex];
+    
+    // Check if current player has extra turn from FURFUR evocation
+    if (currentPlayer?.hasExtraTurn) {
+      console.log(`${currentPlayer.name} has extra turn from FURFUR evocation - skipping turn advancement`);
+      
+      // Clear the extra turn flag and silenced tiles
+      const updatedPlayers = gameState.players.map((p, index) =>
+        index === gameState.currentPlayerIndex 
+          ? { ...p, silencedTiles: [], hasExtraTurn: false } 
+          : p
+      );
+      
+      const updatedGameState: GameState = {
+        ...gameState,
+        players: updatedPlayers
+      };
+      
+      this.games.set(gameId, updatedGameState);
+      
+      // Don't advance turn, but still reduce cooldowns
+      this.reduceIntercessionCooldowns(gameId);
+      return;
+    }
+
     // Clear silenced tiles for the player whose turn just ended
     const clearedPlayers = gameState.players.map((p, index) =>
       index === gameState.currentPlayerIndex ? { ...p, silencedTiles: [] } : p
@@ -1911,7 +1936,9 @@ export class GameService {
           return { success: true, errors: [] };
 
         case 'FURFUR':
-          // FURFUR grants extra turn - this is handled during turn advancement
+          // FURFUR grants extra turn - set flag on player
+          const updatedPlayerFurfur = { ...player, hasExtraTurn: true };
+          this.updatePlayerInGame(gameId, playerId, updatedPlayerFurfur);
           console.log(`FURFUR evocation: ${player.name} will get an extra turn`);
           return { success: true, errors: [] };
 

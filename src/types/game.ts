@@ -103,6 +103,8 @@ export interface Player {
   samaelDoubleDamage?: boolean;  // Next word deals double damage
   urielProtection?: boolean;     // 50% damage reduction next turn
   silencedTiles?: string[];      // Tiles locked for current turn
+  // Evocation effects
+  hasExtraTurn?: boolean;        // FURFUR evocation grants extra turn
 }
 
 export interface GameState {
