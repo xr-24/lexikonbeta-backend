@@ -51,6 +51,7 @@ export class RoomManager {
       hostId: hostPlayer.id,
       players: [hostPlayer],
       isStarted: false,
+      intercessionSelectionStarted: false,
       createdAt: new Date(),
       maxPlayers: 2, // HP mode only supports 2 players
     };
@@ -284,7 +285,7 @@ export class RoomManager {
     }, this.ROOM_CLEANUP_TIMEOUT);
   }
 
-  startGame(hostSocketId: string): { success: boolean; gameState?: any; error?: string } {
+  startGame(hostSocketId: string): { success: boolean; gameState?: any; error?: string; waitingForIntercessions?: boolean } {
     const roomId = this.playerRooms.get(hostSocketId);
     if (!roomId) {
       return { success: false, error: 'Player is not in a room' };
@@ -307,11 +308,16 @@ export class RoomManager {
     // Use the new validation method
     const canStartResult = this.canStartGame(roomId);
     if (!canStartResult.canStart) {
+      if (canStartResult.reason === 'All human players must select intercessions before starting') {
+        room.intercessionSelectionStarted = true;
+        return { success: false, waitingForIntercessions: true };
+      }
       return { success: false, error: canStartResult.reason };
     }
 
     // Start the game
     room.isStarted = true;
+    room.intercessionSelectionStarted = false;
     const roomPlayers = room.players.map(p => ({ 
       id: p.id, 
       name: p.name, 
@@ -340,6 +346,7 @@ export class RoomManager {
       hostId: room.hostId,
       players: room.players,
       isStarted: room.isStarted,
+      intercessionSelectionStarted: room.intercessionSelectionStarted,
       maxPlayers: room.maxPlayers,
     };
   }
@@ -483,7 +490,7 @@ export class RoomManager {
     };
   }
 
-  selectIntercessions(playerSocketId: string, request: SelectIntercessionsRequest): { success: boolean; room?: RoomInfo; error?: string } {
+  selectIntercessions(playerSocketId: string, request: SelectIntercessionsRequest): { success: boolean; room?: RoomInfo; error?: string; gameState?: any } {
     const roomId = this.playerRooms.get(playerSocketId);
     if (!roomId) {
       return { success: false, error: 'Player is not in a room' };
@@ -526,9 +533,29 @@ export class RoomManager {
 
     console.log(`Player ${player.name} selected intercessions: ${request.intercessionTypes.join(', ')} in room ${room.code}`);
 
+    let gameState: any | undefined;
+    if (room.intercessionSelectionStarted) {
+      const canStartResult = this.canStartGame(roomId);
+      if (canStartResult.canStart) {
+        room.isStarted = true;
+        room.intercessionSelectionStarted = false;
+        const roomPlayers = room.players.map(p => ({
+          id: p.id,
+          name: p.name,
+          color: p.color,
+          isAI: p.isAI,
+          aiPersonality: p.aiPersonality,
+          selectedIntercessions: p.selectedIntercessions || []
+        }));
+        gameState = gameService.initializeGame(roomId, roomPlayers);
+        room.gameState = gameState;
+      }
+    }
+
     return {
       success: true,
-      room: this.getRoomInfo(roomId)!
+      room: this.getRoomInfo(roomId)!,
+      ...(gameState ? { gameState } : {})
     };
   }
 

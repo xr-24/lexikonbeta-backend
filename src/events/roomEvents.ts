@@ -217,22 +217,31 @@ export function registerRoomEvents(socket: Socket, io: Server) {
       console.log('Start game request from:', socket.id);
       
       const result = roomManager.startGame(socket.id);
-      
+
       if (result.success && result.gameState) {
         const playerInRoom = roomManager.getPlayerInRoom(socket.id);
-        
+
         if (playerInRoom) {
           // Broadcast game start to all players in the room
           io.to(playerInRoom.room.id).emit('game-started', {
             success: true,
             gameState: result.gameState
           });
-          
+
           // Check if first player is AI and execute their move with io instance
           gameService.checkAndExecuteAITurn(playerInRoom.room.id, io);
-          
+
           console.log(`Game started in room ${playerInRoom.room.code}`);
         }
+      } else if (result.waitingForIntercessions) {
+        const playerInRoom = roomManager.getPlayerInRoom(socket.id);
+        if (playerInRoom) {
+          io.to(playerInRoom.room.id).emit('intercession-selection-start');
+        }
+        socket.emit('game-started', {
+          success: false,
+          waitingForIntercessions: true
+        });
       } else {
         socket.emit('game-started', {
           success: false,
@@ -475,7 +484,7 @@ export function registerRoomEvents(socket: Socket, io: Server) {
       }
       
       const result = roomManager.selectIntercessions(socket.id, data);
-      
+
       if (result.success && result.room) {
         // Send success response to the player
         socket.emit('intercessions-selected', {
@@ -486,15 +495,23 @@ export function registerRoomEvents(socket: Socket, io: Server) {
         // Broadcast room update to all players in the room
         io.to(result.room.id).emit('room-updated', result.room);
         
-        // Check if all players have selected intercessions and notify
-        const canStartResult = roomManager.canStartGame(result.room.id);
-        if (canStartResult.canStart) {
-          io.to(result.room.id).emit('ready-to-start', {
-            message: 'All players have selected intercessions. Ready to start!'
+        if (result.gameState) {
+          io.to(result.room.id).emit('game-started', {
+            success: true,
+            gameState: result.gameState
           });
+          gameService.checkAndExecuteAITurn(result.room.id, io);
+        } else {
+          // Check if all players have selected intercessions and notify
+          const canStartResult = roomManager.canStartGame(result.room.id);
+          if (canStartResult.canStart) {
+            io.to(result.room.id).emit('ready-to-start', {
+              message: 'All players have selected intercessions. Ready to start!'
+            });
+          }
+
+          console.log(`Player selected intercessions in room ${result.room.code}`);
         }
-        
-        console.log(`Player selected intercessions in room ${result.room.code}`);
       } else {
         socket.emit('intercessions-selected', {
           success: false,
