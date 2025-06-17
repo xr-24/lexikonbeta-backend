@@ -187,7 +187,7 @@ export class GameService {
     this.pendingTiles.set(gameId, []);
   }
 
-  async commitMove(gameId: string, playerId: string): Promise<{ success: boolean; errors: string[]; moveResult?: MoveResult }> {
+  async commitMove(gameId: string, playerId: string, io?: any): Promise<{ success: boolean; errors: string[]; moveResult?: MoveResult }> {
     console.log('CommitMove called:', { gameId, playerId });
     const gameState = this.games.get(gameId);
     const pendingTiles = this.pendingTiles.get(gameId);
@@ -289,6 +289,9 @@ export class GameService {
           hp: Math.max(0, opponent.hp - damageDealt),
           urielProtection: false  // Clear Uriel protection after taking damage
         };
+        
+        // Emit damage event for visual feedback
+        this.emitDamageEvent(gameId, opponent.id, damageDealt, opponent.isAI || false, io);
       }
 
       const updatedPlayers = gameState.players.map(p => {
@@ -1352,6 +1355,18 @@ export class GameService {
       console.error(`Error executing power-up ${powerUpType}:`, error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       return { success: false, errors: [`Failed to execute power-up: ${errorMessage}`] };
+    }
+  }
+
+  // Emit damage event for visual feedback
+  emitDamageEvent(gameId: string, playerId: string, damage: number, isAI: boolean, io?: any): void {
+    if (io) {
+      console.log(`Emitting damage event: ${playerId} took ${damage} damage (AI: ${isAI})`);
+      io.to(gameId).emit('damage-event', {
+        playerId,
+        damage,
+        isAI
+      });
     }
   }
 

@@ -293,7 +293,7 @@ export function registerGameEvents(socket: Socket, io: Server) {
         return;
       }
 
-      const result = await gameService.commitMove(context.roomId, context.player.id);
+      const result = await gameService.commitMove(context.roomId, context.player.id, io);
       
       socket.emit('commit-move-response', {
         success: result.success,
