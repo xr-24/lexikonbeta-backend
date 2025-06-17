@@ -74,7 +74,8 @@ export type IntercessionsType =
 export interface BoardCell {
   tile: Tile | null;
   multiplier: MultiplierType | null;
-  powerUp: PowerUp | null;
+  powerUp: PowerUp | null; // Legacy field - now stores evocations
+  evocation?: Evocation | null; // New field for evocations
 }
 
 export type MultiplierType = 

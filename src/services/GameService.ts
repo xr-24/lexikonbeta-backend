@@ -4,6 +4,7 @@ import { createTileBag, drawTiles, TILES_PER_PLAYER } from '../constants/tiles';
 import { createPlayerIntercessions } from '../constants/intercessions';
 import { moveManager, type MoveResult } from './moveManager';
 import { PowerUpManager } from './PowerUpManager';
+import { EvocationManager } from './EvocationManager';
 import { quackleGaddagAIService } from './QuackleGADDAGAIService';
 
 export class GameService {
@@ -272,9 +273,10 @@ export class GameService {
             // AI gets 20 HP healing per evocation
             updatedPlayer.hp = Math.min(200, updatedPlayer.hp + 20);
           } else {
-            // Human gets evocation ability (convert PowerUp to Evocation)
-            // For now, keep existing powerup logic - will be updated in Phase 3
-            updatedPlayer = PowerUpManager.collectPowerUpFromBoard(updatedPlayer, powerUp);
+            // Human gets evocation ability - convert PowerUp to Evocation
+            // Since board now spawns evocations stored as powerUps, treat them as evocations
+            const evocation = powerUp as any; // The board stores evocations in powerUp field
+            updatedPlayer = EvocationManager.collectEvocationFromBoard(updatedPlayer, evocation);
           }
         });
       }
