@@ -358,6 +358,167 @@ export class GameService {
     }
   }
 
+  // Special version of commitMove that doesn't advance the turn - used by Gabriel intercession
+  async commitMoveWithoutTurnAdvancement(gameId: string, playerId: string): Promise<{ success: boolean; errors: string[]; moveResult?: MoveResult }> {
+    console.log('CommitMoveWithoutTurnAdvancement called:', { gameId, playerId });
+    const gameState = this.games.get(gameId);
+    const pendingTiles = this.pendingTiles.get(gameId);
+    
+    if (!gameState || !pendingTiles) {
+      return { success: false, errors: ['Game not found'] };
+    }
+
+    const currentPlayer = gameState.players[gameState.currentPlayerIndex];
+    
+    if (!currentPlayer) {
+      return { success: false, errors: ['No current player found'] };
+    }
+    
+    if (currentPlayer.id !== playerId) {
+      return { success: false, errors: ['Not your turn'] };
+    }
+    
+    if (pendingTiles.length === 0) {
+      return { success: false, errors: ['No tiles placed'] };
+    }
+
+    // Critical security check: validate all pending tiles are owned by the player
+    if (!this.validateAllPendingTilesOwnership(playerId, gameState, pendingTiles)) {
+      console.error(`SECURITY ALERT: Player ${playerId} attempted to commit move with tiles they don't own`);
+      return { success: false, errors: ['Invalid tile ownership'] };
+    }
+
+    const moveResult = await moveManager.executeMove(gameState.board, currentPlayer, pendingTiles);
+
+    if (moveResult.isValid && moveResult.score) {
+      // Stamp tiles with player ID before committing to board
+      const tilesWithOwnership = pendingTiles.map(placedTile => ({
+        ...placedTile,
+        tile: {
+          ...placedTile.tile,
+          placedByPlayerId: currentPlayer.id
+        }
+      }));
+      
+      const newBoard = moveManager.commitMove(gameState.board, tilesWithOwnership);
+      const remainingTiles = moveManager.removeTilesFromPlayer(currentPlayer, pendingTiles);
+      
+      const tilesNeeded = TILES_PER_PLAYER - remainingTiles.length;
+      const { drawnTiles, remainingBag } = drawTiles(gameState.tileBag, Math.min(tilesNeeded, gameState.tileBag.length));
+
+      // HP-based scoring: damage opponent instead of adding to own score
+      const opponent = gameState.players.find(p => p.id !== currentPlayer.id);
+      let baseDamage = moveResult.score?.totalScore ?? 0;
+      
+      // Check for Samael double damage effect
+      let damageDealt = baseDamage;
+      if (currentPlayer.samaelDoubleDamage) {
+        damageDealt = baseDamage * 2;
+        console.log(`Samael double damage: ${baseDamage} -> ${damageDealt}`);
+      }
+      
+      // Check for Uriel protection on opponent
+      if (opponent?.urielProtection) {
+        damageDealt = Math.floor(damageDealt * 0.5);
+        console.log(`Uriel protection: damage reduced to ${damageDealt}`);
+      }
+      
+      let updatedPlayer: Player = {
+        ...currentPlayer,
+        tiles: [...remainingTiles, ...drawnTiles],
+        score: currentPlayer.score + damageDealt, // Keep traditional score for history
+        activePowerUpForTurn: null, // Clear active power-up after move
+        samaelDoubleDamage: false, // Clear Samael effect after use
+      };
+
+      // Add collected evocations to player's inventory (or heal AI)
+      if (moveResult.collectedPowerUps && moveResult.collectedPowerUps.length > 0) {
+        moveResult.collectedPowerUps.forEach(powerUp => {
+          if (updatedPlayer.isAI) {
+            // AI gets 20 HP healing per evocation
+            updatedPlayer.hp = Math.min(200, updatedPlayer.hp + 20);
+          } else {
+            // Human gets evocation ability (convert PowerUp to Evocation)
+            // For now, keep existing powerup logic - will be updated in Phase 3
+            updatedPlayer = PowerUpManager.collectPowerUpFromBoard(updatedPlayer, powerUp);
+          }
+        });
+      }
+
+      // Apply HP damage to opponent
+      let updatedOpponent = opponent;
+      if (opponent && damageDealt > 0) {
+        updatedOpponent = {
+          ...opponent,
+          hp: Math.max(0, opponent.hp - damageDealt),
+          urielProtection: false  // Clear Uriel protection after taking damage
+        };
+      }
+
+      const updatedPlayers = gameState.players.map(p => {
+        if (p.id === currentPlayer.id) return updatedPlayer;
+        if (p.id === opponent?.id && updatedOpponent) return updatedOpponent;
+        return p;
+      });
+
+      // Check for HP victory condition
+      if (updatedOpponent && updatedOpponent.hp <= 0) {
+        const finalGameState: GameState = {
+          ...gameState,
+          board: newBoard,
+          players: updatedPlayers,
+          tileBag: remainingBag,
+          gamePhase: 'FINISHED'
+        };
+
+        this.games.set(gameId, finalGameState);
+        this.pendingTiles.set(gameId, []);
+
+        // Add move to history
+        const words = moveResult.validation.words.map(w => w.word);
+        this.addMoveToHistory(
+          gameId,
+          currentPlayer.id,
+          currentPlayer.name,
+          'WORD',
+          words,
+          moveResult.score.totalScore
+        );
+
+        console.log(`Game ${gameId} ended: ${currentPlayer.name} defeated ${updatedOpponent.name} (HP: ${updatedOpponent.hp})`);
+        return { success: true, errors: [], moveResult };
+      }
+
+      // Update game state but DON'T advance turn
+      const updatedGameState: GameState = {
+        ...gameState,
+        board: newBoard,
+        players: updatedPlayers,
+        tileBag: remainingBag,
+      };
+
+      this.games.set(gameId, updatedGameState);
+      this.pendingTiles.set(gameId, []);
+
+      // Add move to history after updating game state
+      const words = moveResult.validation.words.map(w => w.word);
+      this.addMoveToHistory(
+        gameId,
+        currentPlayer.id,
+        currentPlayer.name,
+        'WORD',
+        words,
+        moveResult.score.totalScore
+      );
+
+      // NOTE: We deliberately do NOT call nextTurn() here - that's handled by the caller
+
+      return { success: true, errors: [], moveResult };
+    } else {
+      return { success: false, errors: moveResult.errors, moveResult };
+    }
+  }
+
   previewBoard(gameId: string): any[][] | null {
     const gameState = this.games.get(gameId);
     const pendingTiles = this.pendingTiles.get(gameId);
@@ -601,8 +762,9 @@ export class GameService {
           const result = await this.executeAIMove(gameId);
           console.log(`AI move result for ${currentPlayer.name}:`, result);
           
-          // Always broadcast game state update after AI move
+          // Always broadcast game state update after AI move - CRITICAL for frontend sync
           if (io) {
+            console.log(`Broadcasting game state after AI move for ${currentPlayer.name}`);
             this.broadcastGameState(gameId, io);
           }
           
@@ -615,9 +777,16 @@ export class GameService {
             
             // Broadcast after pass turn too
             if (io) {
+              console.log(`Broadcasting game state after AI pass turn for ${currentPlayer.name}`);
               this.broadcastGameState(gameId, io);
             }
           }
+          
+          // Check if the next player is also AI and needs to move
+          setTimeout(() => {
+            this.checkAndExecuteAITurn(gameId, io);
+          }, 500);
+          
         } catch (error) {
           console.error(`Error in AI move execution for ${currentPlayer.name}:`, error);
           // Fallback: pass turn if AI completely fails
@@ -628,13 +797,26 @@ export class GameService {
             
             // Broadcast after emergency pass
             if (io) {
+              console.log(`Broadcasting game state after AI emergency pass for ${currentPlayer.name}`);
               this.broadcastGameState(gameId, io);
             }
+            
+            // Check if the next player is also AI and needs to move
+            setTimeout(() => {
+              this.checkAndExecuteAITurn(gameId, io);
+            }, 500);
+            
           } catch (passError) {
             console.error(`Emergency pass also failed for ${currentPlayer.name}:`, passError);
           }
         }
       }, 1000 + Math.random() * 2000); // 1-3 second delay
+    } else {
+      // If current player is not AI, make sure we broadcast the current state
+      if (io) {
+        console.log(`Current player ${currentPlayer?.name} is not AI, broadcasting current game state`);
+        this.broadcastGameState(gameId, io);
+      }
     }
   }
 
@@ -1422,11 +1604,15 @@ export class GameService {
         // Set the pending tiles for Gabriel's auto-play
         this.pendingTiles.set(gameId, aiMove.tiles);
         
-        // Commit the move automatically
-        const moveResult = await this.commitMove(gameId, playerId);
+        // Commit the move automatically - but don't let it call nextTurn yet
+        const moveResult = await this.commitMoveWithoutTurnAdvancement(gameId, playerId);
         
         if (moveResult.success) {
           console.log(`Gabriel intercession: Successfully auto-played word for ${moveResult.moveResult?.score?.totalScore || 0} points`);
+          
+          // Now manually advance the turn to ensure proper state management
+          this.nextTurn(gameId);
+          
           return { success: true, errors: [], intercessionType: 'GABRIEL' };
         } else {
           // Clear pending tiles if move failed

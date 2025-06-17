@@ -888,6 +888,11 @@ export function registerGameEvents(socket: Socket, io: Server) {
         });
         
         console.log(`Player ${context.player.name} activated intercession ${result.intercessionType}`);
+        
+        // Check if next player is AI and execute their move (especially important for Gabriel)
+        setTimeout(() => {
+          gameService.checkAndExecuteAITurn(context.roomId, io);
+        }, 500);
       }
     } catch (error) {
       console.error('Error in activate-intercession:', error);
