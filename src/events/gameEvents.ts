@@ -312,10 +312,10 @@ export function registerGameEvents(socket: Socket, io: Server) {
           moveResult: result.moveResult
         });
         
-        // Check if next player is AI and execute their move
+        // Check if next player is AI and execute their move (increased delay to prevent sound overlap)
         setTimeout(() => {
           gameService.checkAndExecuteAITurn(context.roomId, io);
-        }, 500);
+        }, 2500);
       }
     } catch (error) {
       console.error('Error committing move:', error);
