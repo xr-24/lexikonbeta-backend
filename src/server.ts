@@ -2,6 +2,7 @@ import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
+// Beta deployment trigger - v1.0.1
 import { registerRoomEvents } from './events/roomEvents';
 import { registerGameEvents } from './events/gameEvents';
 import { dictionaryService } from './services/dictionaryService';
