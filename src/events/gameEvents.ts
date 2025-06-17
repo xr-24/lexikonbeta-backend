@@ -484,6 +484,11 @@ export function registerGameEvents(socket: Socket, io: Server) {
           playerId: context.player.id,
           playerName: context.player.name
         });
+        
+        // Check if next player is AI and execute their move
+        setTimeout(() => {
+          gameService.checkAndExecuteAITurn(context.roomId, io);
+        }, 500);
       }
     } catch (error) {
       console.error('Error in pass-turn:', error);
