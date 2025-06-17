@@ -76,8 +76,11 @@ export function registerRoomEvents(socket: Socket, io: Server) {
   // Join an existing room
   socket.on('join-room', (data: JoinRoomRequest) => {
     try {
+      console.log('🔍 Join room request received:', { socketId: socket.id, data });
+      
       // Rate limiting
       if (!RateLimiter.checkLimit(socket.id, 'join-room', 3, 10000)) { // 3 per 10 seconds
+        console.log('❌ Rate limit exceeded for join-room:', socket.id);
         socket.emit('room-joined', {
           success: false,
           error: 'Please wait before trying to join again'
@@ -85,10 +88,9 @@ export function registerRoomEvents(socket: Socket, io: Server) {
         return;
       }
 
-      console.log('Join room request:', data);
-      
       // Validate input
       if (!data || typeof data !== 'object') {
+        console.log('❌ Invalid request data for join-room:', data);
         socket.emit('room-joined', {
           success: false,
           error: 'Invalid request data'
@@ -96,10 +98,12 @@ export function registerRoomEvents(socket: Socket, io: Server) {
         return;
       }
 
+      console.log('🔍 Validating player name and room code...');
       const nameValidation = ValidationUtils.validatePlayerName(data.playerName);
       const codeValidation = ValidationUtils.validateRoomCode(data.roomCode);
 
       if (!nameValidation.isValid) {
+        console.log('❌ Invalid player name:', nameValidation.errors);
         socket.emit('room-joined', {
           success: false,
           error: nameValidation.errors[0] || 'Invalid player name'
@@ -108,6 +112,7 @@ export function registerRoomEvents(socket: Socket, io: Server) {
       }
 
       if (!codeValidation.isValid) {
+        console.log('❌ Invalid room code:', codeValidation.errors);
         socket.emit('room-joined', {
           success: false,
           error: codeValidation.errors[0] || 'Invalid room code'
@@ -121,9 +126,13 @@ export function registerRoomEvents(socket: Socket, io: Server) {
         playerName: nameValidation.sanitized
       };
       
+      console.log('🔍 Attempting to join room with sanitized data:', sanitizedData);
       const result = roomManager.joinRoom(socket.id, sanitizedData);
+      console.log('🔍 Room join result:', { success: result.success, error: result.error });
       
       if (result.success && result.room) {
+        console.log('✅ Room join successful, joining socket to room:', result.room.id);
+        
         // Join the socket to the room
         socket.join(result.room.id);
         
@@ -142,15 +151,16 @@ export function registerRoomEvents(socket: Socket, io: Server) {
           room: result.room
         });
         
-        console.log(`Player ${sanitizedData.playerName} joined room ${sanitizedData.roomCode}`);
+        console.log(`✅ Player ${sanitizedData.playerName} successfully joined room ${sanitizedData.roomCode}`);
       } else {
+        console.log('❌ Room join failed:', result.error);
         socket.emit('room-joined', {
           success: false,
           error: result.error || 'Failed to join room'
         });
       }
     } catch (error) {
-      console.error('Error in join-room:', error);
+      console.error('💥 Critical error in join-room:', error);
       socket.emit('room-joined', {
         success: false,
         error: 'An error occurred while joining the room'

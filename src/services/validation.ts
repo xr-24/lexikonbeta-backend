@@ -88,13 +88,13 @@ export class ValidationUtils {
       };
     }
 
-    // Format validation
-    if (!/^[A-Z0-9]{6}$/.test(code)) {
-      errors.push('Room code must be 6 alphanumeric characters');
+    // Format validation - accept 6 digits (numeric room codes)
+    if (!/^[0-9]{6}$/.test(code)) {
+      errors.push('Room code must be 6 digits');
     }
 
     // Sanitize
-    const sanitized = validator.escape(code).toUpperCase();
+    const sanitized = validator.escape(code);
 
     return {
       isValid: errors.length === 0,

@@ -69,20 +69,31 @@ export class RoomManager {
   }
 
   joinRoom(playerSocketId: string, request: JoinRoomRequest): { success: boolean; room?: RoomInfo; error?: string } {
+    console.log('🔍 RoomManager.joinRoom called with:', { playerSocketId, request });
+    
     // Check if player is already in a room
     if (this.playerRooms.has(playerSocketId)) {
+      console.log('❌ Player already in a room:', playerSocketId);
       return { success: false, error: 'Player is already in a room' };
     }
 
+    console.log('🔍 Looking up room by code:', request.roomCode);
+    console.log('🔍 Available room codes:', Array.from(this.roomsByCode.keys()));
+    
     const roomId = this.roomsByCode.get(request.roomCode);
     if (!roomId) {
+      console.log('❌ Room not found for code:', request.roomCode);
       return { success: false, error: 'Room not found' };
     }
 
+    console.log('🔍 Found room ID:', roomId);
     const room = this.rooms.get(roomId);
     if (!room) {
+      console.log('❌ Room object not found for ID:', roomId);
       return { success: false, error: 'Room not found' };
     }
+
+    console.log('🔍 Room found:', { id: room.id, code: room.code, playerCount: room.players.length });
 
     // Check if this is a reconnection attempt
     const disconnectedPlayer = Array.from(this.disconnectedPlayers.values())
