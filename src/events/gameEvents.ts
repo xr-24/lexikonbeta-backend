@@ -909,7 +909,7 @@ export function registerGameEvents(socket: Socket, io: Server) {
       }
 
       // Execute the intercession through GameService (now async)
-      const result = await gameService.executeIntercession(context.roomId, context.player.id, data.intercessionId);
+      const result = await gameService.executeIntercession(context.roomId, context.player.id, data.intercessionId, io);
       
       socket.emit('activate-intercession-response', {
         success: result.success,
