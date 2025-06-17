@@ -1385,7 +1385,7 @@ export class GameService {
   }
 
   // Intercession execution methods
-  async executeIntercession(gameId: string, playerId: string, intercessionId: string): Promise<{ success: boolean; errors: string[]; intercessionType?: string }> {
+  async executeIntercession(gameId: string, playerId: string, intercessionId: string, io?: any): Promise<{ success: boolean; errors: string[]; intercessionType?: string }> {
     const gameState = this.games.get(gameId);
     if (!gameState) {
       return { success: false, errors: ['Game not found'] };
@@ -1417,7 +1417,7 @@ export class GameService {
         case 'URIEL':
           return this.executeUriel(gameId, playerId, intercessionId);
         case 'GABRIEL':
-          return await this.executeGabriel(gameId, playerId, intercessionId);
+          return await this.executeGabriel(gameId, playerId, intercessionId, io);
         case 'METATRON':
           return this.executeMetatron(gameId, playerId, intercessionId);
         default:
@@ -1582,7 +1582,7 @@ export class GameService {
     return { success: true, errors: [], intercessionType: 'URIEL' };
   }
 
-  private async executeGabriel(gameId: string, playerId: string, intercessionId: string): Promise<{ success: boolean; errors: string[]; intercessionType: string }> {
+  private async executeGabriel(gameId: string, playerId: string, intercessionId: string, io?: any): Promise<{ success: boolean; errors: string[]; intercessionType: string }> {
     const gameState = this.games.get(gameId);
     if (!gameState) {
       return { success: false, errors: ['Game not found'], intercessionType: 'GABRIEL' };
@@ -1638,8 +1638,42 @@ export class GameService {
           return { success: true, errors: [`Auto-play failed: ${moveResult.errors.join(', ')}`], intercessionType: 'GABRIEL' };
         }
       } else {
-        console.log(`Gabriel intercession: No valid word moves available, intercession activated but no move made`);
-        return { success: true, errors: ['No valid moves available for auto-play'], intercessionType: 'GABRIEL' };
+        console.log(`Gabriel intercession: No valid word moves available, applying fallback damage`);
+
+        // Find opponent similar to Michael intercession
+        const opponent = updatedGameState.players.find(p => p.id !== playerId && !p.hasEndedGame);
+        if (opponent) {
+          const damage = 30;
+          const newHP = Math.max(0, opponent.hp - damage);
+
+          const finalPlayers = updatedGameState.players.map(p => {
+            if (p.id === opponent.id) return { ...p, hp: newHP };
+            return p;
+          });
+
+          let gamePhase = updatedGameState.gamePhase;
+          if (newHP <= 0) {
+            gamePhase = 'FINISHED';
+          }
+
+          const finalGameState: GameState = {
+            ...updatedGameState,
+            players: finalPlayers,
+            gamePhase
+          };
+
+          this.games.set(gameId, finalGameState);
+
+          // Emit damage event for visual feedback
+          this.emitDamageEvent(gameId, opponent.id, damage, opponent.isAI || false, io);
+
+          console.log(`Gabriel intercession fallback: ${opponent.name} took ${damage} damage (HP: ${opponent.hp} -> ${newHP})`);
+
+          return { success: true, errors: [], intercessionType: 'GABRIEL' };
+        } else {
+          console.log(`Gabriel intercession fallback failed: no valid opponent found`);
+          return { success: true, errors: ['No valid opponent for fallback damage'], intercessionType: 'GABRIEL' };
+        }
       }
     } catch (error) {
       console.error(`Gabriel intercession error:`, error);
