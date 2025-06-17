@@ -276,8 +276,9 @@ export class GameService {
       if (moveResult.collectedPowerUps && moveResult.collectedPowerUps.length > 0) {
         moveResult.collectedPowerUps.forEach(powerUp => {
           if (updatedPlayer.isAI) {
-            // AI gets 20 HP healing per evocation
-            updatedPlayer.hp = Math.min(200, updatedPlayer.hp + 20);
+            // AI gets 20 HP healing per evocation (max 300 HP)
+            updatedPlayer.hp = Math.min(300, updatedPlayer.hp + 20);
+            console.log(`AI ${updatedPlayer.name} collected evocation and healed 20 HP (${updatedPlayer.hp - 20} -> ${updatedPlayer.hp})`);
           } else {
             // Human gets evocation ability - convert PowerUp to Evocation
             // Since board now spawns evocations stored as powerUps, treat them as evocations
