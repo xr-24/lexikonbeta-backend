@@ -107,6 +107,12 @@ export interface Player {
   hasExtraTurn?: boolean;        // FURFUR evocation grants extra turn
 }
 
+export interface TilePullResult {
+  startingPlayerIndex: number;
+  remainingBag: Tile[];
+  tilePullResults: Array<{ playerId: string; playerName: string; tile: Tile }>;
+}
+
 export interface GameState {
   board: BoardCell[][];
   players: Player[];
@@ -116,6 +122,7 @@ export interface GameState {
   turnNumber: number;
   playersEndedGame: string[];
   moveHistory: MoveHistoryEntry[];
+  tilePullResult?: TilePullResult;
 }
 
 export interface PlacedTile {

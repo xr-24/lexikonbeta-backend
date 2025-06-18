@@ -11,9 +11,79 @@ export class GameService {
   private games: Map<string, GameState> = new Map();
   private pendingTiles: Map<string, PlacedTile[]> = new Map();
 
+  // Perform tile pull to determine starting player
+  private performTilePull(roomPlayers: Array<{id: string, name: string, color?: string, isAI?: boolean, aiPersonality?: string, selectedIntercessions?: string[]}>, tileBag: Tile[]): { startingPlayerIndex: number; remainingBag: Tile[]; tilePullResults: Array<{ playerId: string; playerName: string; tile: Tile }> } {
+    console.log('Performing tile pull to determine starting player');
+    
+    const tilePullResults: Array<{ playerId: string; playerName: string; tile: Tile }> = [];
+    let currentBag = [...tileBag];
+    
+    // Each player draws a tile
+    for (let i = 0; i < roomPlayers.length; i++) {
+      const player = roomPlayers[i];
+      if (currentBag.length === 0) {
+        // Fallback if no tiles left - shouldn't happen in normal game
+        console.warn('No tiles left in bag during tile pull');
+        break;
+      }
+      
+      // Draw a random tile
+      const randomIndex = Math.floor(Math.random() * currentBag.length);
+      const drawnTile = currentBag[randomIndex];
+      currentBag.splice(randomIndex, 1);
+      
+      tilePullResults.push({
+        playerId: player.id,
+        playerName: player.name,
+        tile: drawnTile
+      });
+      
+      console.log(`${player.name} drew tile: ${drawnTile.letter} (value: ${drawnTile.value})`);
+    }
+    
+    // Put the drawn tiles back into the bag and shuffle
+    const drawnTiles = tilePullResults.map(result => result.tile);
+    currentBag.push(...drawnTiles);
+    
+    // Shuffle the bag
+    for (let i = currentBag.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [currentBag[i], currentBag[j]] = [currentBag[j], currentBag[i]];
+    }
+    
+    // Determine starting player - closest to 'A' wins (lowest letter value)
+    // In case of tie, use the order they joined (first player wins)
+    let startingPlayerIndex = 0;
+    let bestTile = tilePullResults[0].tile;
+    
+    for (let i = 1; i < tilePullResults.length; i++) {
+      const currentTile = tilePullResults[i].tile;
+      
+      // Compare by letter (A comes before Z)
+      if (currentTile.letter < bestTile.letter) {
+        startingPlayerIndex = i;
+        bestTile = currentTile;
+      }
+      // If same letter, first player wins (no change needed)
+    }
+    
+    console.log(`Starting player determined: ${roomPlayers[startingPlayerIndex].name} (drew ${bestTile.letter})`);
+    
+    return {
+      startingPlayerIndex,
+      remainingBag: currentBag,
+      tilePullResults
+    };
+  }
+
   initializeGame(gameId: string, roomPlayers: Array<{id: string, name: string, color?: string, isAI?: boolean, aiPersonality?: string, selectedIntercessions?: string[]}>): GameState {
     console.log('Initializing game with players:', roomPlayers);
     let tileBag = createTileBag();
+    
+    // Perform tile pull to determine starting player
+    const tilePullResult = this.performTilePull(roomPlayers, tileBag);
+    tileBag = tilePullResult.remainingBag;
+    
     const players: Player[] = roomPlayers.map((roomPlayer) => {
       const { drawnTiles, remainingBag } = drawTiles(tileBag, TILES_PER_PLAYER);
       tileBag = remainingBag;
@@ -43,12 +113,13 @@ export class GameService {
     const gameState: GameState = {
       board: createEmptyBoard(),
       players,
-      currentPlayerIndex: 0,
+      currentPlayerIndex: tilePullResult.startingPlayerIndex,
       tileBag,
       gamePhase: 'PLAYING',
       turnNumber: 1,
       playersEndedGame: [],
       moveHistory: [],
+      tilePullResult: tilePullResult, // Store the tile pull result for frontend display
     };
 
     this.games.set(gameId, gameState);
