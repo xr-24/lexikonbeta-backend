@@ -943,7 +943,7 @@ export class GameService {
     }
   }
 
-  addMoveToHistory(gameId: string, playerId: string, playerName: string, moveType: 'WORD' | 'EXCHANGE' | 'PASS', words?: string[], score?: number): void {
+  addMoveToHistory(gameId: string, playerId: string, playerName: string, moveType: 'WORD' | 'EXCHANGE' | 'PASS' | 'EVOCATION' | 'INTERCESSION', words?: string[], score?: number, spellInfo?: { spellType: 'EVOCATION' | 'INTERCESSION'; spellName: string; spellEffect: string; damageDealt?: number; damageTarget?: string }): void {
     const gameState = this.games.get(gameId);
     if (!gameState) return;
     
@@ -955,6 +955,14 @@ export class GameService {
       words: words || [],
       score: score || 0,
       timestamp: new Date(),
+      // Add spell information if provided
+      ...(spellInfo && {
+        spellType: spellInfo.spellType,
+        spellName: spellInfo.spellName,
+        spellEffect: spellInfo.spellEffect,
+        damageDealt: spellInfo.damageDealt,
+        damageTarget: spellInfo.damageTarget
+      })
     };
 
     const updatedGameState: GameState = {

@@ -136,8 +136,15 @@ export interface MoveHistoryEntry {
   playerId: string;
   playerName: string;
   turnNumber: number;
-  moveType: 'WORD' | 'EXCHANGE' | 'PASS';
+  moveType: 'WORD' | 'EXCHANGE' | 'PASS' | 'EVOCATION' | 'INTERCESSION';
   words?: string[];
   score: number;
   timestamp: Date;
+  // Spell information
+  spellType?: 'EVOCATION' | 'INTERCESSION';
+  spellName?: string;
+  spellEffect?: string;
+  // Damage information
+  damageDealt?: number;
+  damageTarget?: string;
 }

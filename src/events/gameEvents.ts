@@ -837,6 +837,23 @@ export function registerGameEvents(socket: Socket, io: Server) {
               message: 'Evocation activated successfully'
             });
             
+            // Add evocation to move history
+            const evocationName = evocationType !== 'UNKNOWN' ? EvocationManager.getEvocationName(evocationType) : 'Unknown Evocation';
+            const evocationDescription = evocationType !== 'UNKNOWN' ? EvocationManager.getEvocationDescription(evocationType) : 'Unknown evocation effect';
+            gameService.addMoveToHistory(
+              context.roomId,
+              context.player.id,
+              context.player.name,
+              'EVOCATION',
+              [],
+              0,
+              {
+                spellType: 'EVOCATION',
+                spellName: evocationName,
+                spellEffect: evocationDescription
+              }
+            );
+            
             // Broadcast updated game state to all players
             broadcastGameState(context.roomId);
             
@@ -918,6 +935,23 @@ export function registerGameEvents(socket: Socket, io: Server) {
       });
       
       if (result.success) {
+        // Add intercession to move history
+        const intercessionName = getIntercessionName(result.intercessionType || '');
+        const intercessionDescription = getIntercessionDescription(result.intercessionType || '');
+        gameService.addMoveToHistory(
+          context.roomId,
+          context.player.id,
+          context.player.name,
+          'INTERCESSION',
+          [],
+          0,
+          {
+            spellType: 'INTERCESSION',
+            spellName: intercessionName,
+            spellEffect: intercessionDescription
+          }
+        );
+        
         // Broadcast updated game state to all players
         broadcastGameState(context.roomId);
         
@@ -927,7 +961,7 @@ export function registerGameEvents(socket: Socket, io: Server) {
           playerName: context.player.name,
           intercessionId: data.intercessionId,
           intercessionType: result.intercessionType,
-          intercessionName: getIntercessionName(result.intercessionType || '')
+          intercessionName: intercessionName
         });
         
         console.log(`Player ${context.player.name} activated intercession ${result.intercessionType}`);
@@ -957,6 +991,19 @@ export function registerGameEvents(socket: Socket, io: Server) {
       'METATRON': 'Intercession of Metatron'
     };
     return nameMap[type] || type;
+  }
+
+  // Helper function to get intercession description
+  function getIntercessionDescription(type: string): string {
+    const descriptionMap: Record<string, string> = {
+      'MICHAEL': 'Deals 30 direct damage to opponent',
+      'SAMAEL': 'Next word deals double damage',
+      'RAPHAEL': 'Heals 50 HP',
+      'URIEL': 'Reduces incoming damage by 50% for one turn',
+      'GABRIEL': 'Automatically plays the highest scoring word',
+      'METATRON': 'Heals 100 HP'
+    };
+    return descriptionMap[type] || 'Unknown intercession effect';
   }
 
   // Execute power-up with parameters
