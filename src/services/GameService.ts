@@ -1973,11 +1973,13 @@ export class GameService {
           const buneResult = EvocationManager.swapPlayerTiles(player, gameState.tileBag);
           const { finalTiles, updatedBag } = EvocationManager.guaranteeVowelsInDraw(buneResult.updatedPlayer.tiles, buneResult.updatedBag);
           
-          const updatedPlayer = { ...buneResult.updatedPlayer, tiles: finalTiles };
-          this.updatePlayerInGame(gameId, playerId, updatedPlayer);
-          
+          // Update game state with new bag FIRST
           const updatedGameState: GameState = { ...gameState, tileBag: updatedBag };
           this.games.set(gameId, updatedGameState);
+          
+          // THEN update the player
+          const updatedPlayer = { ...buneResult.updatedPlayer, tiles: finalTiles };
+          this.updatePlayerInGame(gameId, playerId, updatedPlayer);
           
           console.log(`BUNE evocation: Swapped tiles for ${player.name} with guaranteed vowels`);
           return { success: true, errors: [] };
