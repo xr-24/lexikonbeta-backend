@@ -615,7 +615,7 @@ export class GameService {
     this.checkAndExecuteAITurn(gameId, io);
   }
 
-  exchangeTiles(gameId: string, playerId: string, tileIds: string[]): { success: boolean; errors: string[] } {
+  exchangeTiles(gameId: string, playerId: string, tileIds: string[], io?: any): { success: boolean; errors: string[] } {
     const gameState = this.games.get(gameId);
     if (!gameState) {
       return { success: false, errors: ['Game not found'] };
@@ -686,12 +686,12 @@ export class GameService {
     );
 
     // Move to next turn
-    this.nextTurn(gameId);
+    this.nextTurn(gameId, io);
 
     return { success: true, errors: [] };
   }
 
-  passTurn(gameId: string, playerId: string): { success: boolean; errors: string[] } {
+  passTurn(gameId: string, playerId: string, io?: any): { success: boolean; errors: string[] } {
     const gameState = this.games.get(gameId);
     if (!gameState) {
       return { success: false, errors: ['Game not found'] };

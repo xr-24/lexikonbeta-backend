@@ -408,7 +408,7 @@ export function registerGameEvents(socket: Socket, io: Server) {
         return;
       }
 
-      const result = gameService.exchangeTiles(context.roomId, context.player.id, data.tileIds);
+      const result = gameService.exchangeTiles(context.roomId, context.player.id, data.tileIds, io);
       
       socket.emit('exchange-tiles-response', {
         success: result.success,
@@ -468,7 +468,7 @@ export function registerGameEvents(socket: Socket, io: Server) {
         return;
       }
 
-      const result = gameService.passTurn(context.roomId, context.player.id);
+      const result = gameService.passTurn(context.roomId, context.player.id, io);
       
       socket.emit('pass-turn-response', {
         success: result.success,
