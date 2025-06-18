@@ -178,28 +178,31 @@ export class QuackleGADDAGAIService {
   }
 
   async generateMove(gameState: GameState, playerId: string): Promise<AIMove> {
-    // Ensure initialization is complete with timeout
+    const player = gameState.players.find(p => p.id === playerId);
+    if (!player) {
+      console.warn(`AI player ${playerId} not found`);
+      return { type: 'PASS' };
+    }
+
+    // Try to ensure initialization, but don't fail if it doesn't work
     try {
       await Promise.race([
         this.ensureInitialized(),
         new Promise<never>((_, reject) => 
-          setTimeout(() => reject(new Error('AI initialization timeout')), 5000)
+          setTimeout(() => reject(new Error('AI initialization timeout')), 3000)
         )
       ]);
     } catch (error) {
-      console.error('AI initialization failed or timed out:', error);
-      return { type: 'PASS' };
+      console.warn(`AI initialization failed for ${player.name}:`, error);
+      // Fall back to simple strategic exchange instead of failing completely
+      console.log(`🔄 ${player.name} falls back to strategic exchange due to initialization failure`);
+      return this.generateStrategicExchange(player.tiles);
     }
 
-    const player = gameState.players.find(p => p.id === playerId);
-    if (!player) {
-      console.error(`AI player ${playerId} not found`);
-      return { type: 'PASS' };
-    }
-
+    // Check if GADDAG is available
     if (!this.gaddag || !this.dictionary) {
-      console.error('GADDAG or dictionary not initialized');
-      return { type: 'PASS' };
+      console.warn(`GADDAG not available for ${player.name}, using fallback strategy`);
+      return this.generateStrategicExchange(player.tiles);
     }
 
     console.log(`🎯 ${player.name} analyzing board with GADDAG...`);
@@ -212,31 +215,41 @@ export class QuackleGADDAGAIService {
       // Convert player tiles to rack string
       const rack = this.convertTilesToRack(player.tiles);
       
-      // Generate moves using GADDAG
-      const moves = gaddagBoard.generateMoves(rack, this.gaddag);
+      // Generate moves using GADDAG with timeout
+      const moves = await Promise.race([
+        Promise.resolve(gaddagBoard.generateMoves(rack, this.gaddag)),
+        new Promise<never>((_, reject) => 
+          setTimeout(() => reject(new Error('Move generation timeout')), 2000)
+        )
+      ]);
       
       if (moves.length === 0) {
-        console.log(`🔄 ${player.name} exchanges tiles strategically`);
+        console.log(`🔄 ${player.name} exchanges tiles strategically - no moves found`);
         return this.generateStrategicExchange(player.tiles);
       }
 
       // Try moves in order until we find one that passes validation
-      for (const move of moves.slice(0, 10)) { // Try top 10 moves
-        const placedTiles = await this.convertGaddagMoveToPlacedTiles(move, player.tiles, gameState.board);
-        
-        // Validate the move using the game's validation system
-        const validation = await validateMove(placedTiles, gameState.board);
-        
-        if (validation.isValid) {
-          const elapsedTime = Date.now() - startTime;
-          console.log(`⚡ ${player.name} plays "${move.word}" for ${move.score} points (equity: ${move.equity}) (${elapsedTime}ms)`);
+      for (const move of moves.slice(0, 15)) { // Try top 15 moves
+        try {
+          const placedTiles = await this.convertGaddagMoveToPlacedTiles(move, player.tiles, gameState.board);
           
-          return {
-            type: 'WORD',
-            tiles: placedTiles
-          };
-        } else {
-          console.log(`❌ ${player.name} rejected "${move.word}": ${validation.errors.join(', ')}`);
+          // Validate the move using the game's validation system
+          const validation = await validateMove(placedTiles, gameState.board);
+          
+          if (validation.isValid) {
+            const elapsedTime = Date.now() - startTime;
+            console.log(`⚡ ${player.name} plays "${move.word}" for ${move.score} points (${elapsedTime}ms)`);
+            
+            return {
+              type: 'WORD',
+              tiles: placedTiles
+            };
+          } else {
+            console.log(`❌ ${player.name} rejected "${move.word}": ${validation.errors.join(', ')}`);
+          }
+        } catch (moveError) {
+          console.warn(`Error processing move "${move.word}" for ${player.name}:`, moveError);
+          continue; // Try next move
         }
       }
       
@@ -244,8 +257,10 @@ export class QuackleGADDAGAIService {
       console.log(`🔄 ${player.name} exchanges tiles - no valid moves found`);
       return this.generateStrategicExchange(player.tiles);
     } catch (error) {
-      console.error(`💀 ${player.name} GADDAG AI error:`, error);
-      return { type: 'PASS' };
+      console.warn(`GADDAG AI error for ${player.name}:`, error);
+      // Fall back to strategic exchange
+      console.log(`🔄 ${player.name} falls back to strategic exchange due to error`);
+      return this.generateStrategicExchange(player.tiles);
     }
   }
 

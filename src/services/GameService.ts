@@ -884,7 +884,7 @@ export class GameService {
           }
           
           if (!result.success) {
-            console.error(`AI move failed for ${currentPlayer.name}:`, result.errors);
+            console.warn(`AI move failed for ${currentPlayer.name}:`, result.errors);
             // If AI move fails, try to pass turn to prevent getting stuck
             console.log(`Attempting to pass turn for ${currentPlayer.name} after failed move`);
             const passResult = this.passTurn(gameId, currentPlayer.id);
@@ -903,7 +903,7 @@ export class GameService {
           }, 500);
           
         } catch (error) {
-          console.error(`Error in AI move execution for ${currentPlayer.name}:`, error);
+          console.warn(`Error in AI move execution for ${currentPlayer.name}:`, error);
           // Fallback: pass turn if AI completely fails
           try {
             console.log(`Emergency pass turn for ${currentPlayer.name} after error`);
@@ -922,7 +922,11 @@ export class GameService {
             }, 500);
             
           } catch (passError) {
-            console.error(`Emergency pass also failed for ${currentPlayer.name}:`, passError);
+            console.warn(`Emergency pass also failed for ${currentPlayer.name}:`, passError);
+            // At this point, just broadcast the current state and hope for the best
+            if (io) {
+              this.broadcastGameState(gameId, io);
+            }
           }
         }
       }, 1000 + Math.random() * 2000); // 1-3 second delay
