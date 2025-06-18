@@ -106,6 +106,8 @@ export interface Player {
   silencedTiles?: string[];      // Tiles locked for current turn
   // Evocation effects
   hasExtraTurn?: boolean;        // FURFUR evocation grants extra turn
+  allowRackExpansion?: boolean;  // HAAGENTI/ANDROMALIUS allows rack expansion
+  maxRackSize?: number;          // Maximum rack size (7 default, 8 for ANDROMALIUS, 10 for HAAGENTI)
 }
 
 export interface TilePullResult {

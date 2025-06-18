@@ -1995,10 +1995,16 @@ export class GameService {
         case 'HAAGENTI':
           const haagenResult = EvocationManager.executeHaagenti(player, gameState.tileBag);
           if (haagenResult.success) {
-            this.updatePlayerInGame(gameId, playerId, haagenResult.updatedPlayer);
+            // Set rack expansion flags for UI display
+            const expandedPlayer = {
+              ...haagenResult.updatedPlayer,
+              allowRackExpansion: true,
+              maxRackSize: 10
+            };
+            this.updatePlayerInGame(gameId, playerId, expandedPlayer);
             const updatedGameStateHaag: GameState = { ...gameState, tileBag: haagenResult.updatedBag };
             this.games.set(gameId, updatedGameStateHaag);
-            console.log(`HAAGENTI evocation: Added 3 tiles to ${player.name}'s rack`);
+            console.log(`HAAGENTI evocation: Added 3 tiles to ${player.name}'s rack and expanded to 10 slots`);
           }
           return { success: haagenResult.success, errors: haagenResult.error ? [haagenResult.error] : [] };
 
