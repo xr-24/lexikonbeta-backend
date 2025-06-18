@@ -2021,8 +2021,27 @@ export class GameService {
           console.log(`FURFUR evocation: ${player.name} will get an extra turn`);
           return { success: true, errors: [] };
 
+        case 'ANDROMALIUS':
+          if (!opponent) {
+            return { success: false, errors: ['No valid opponent found'] };
+          }
+          // For ANDROMALIUS, we need to randomly select 1 tile from opponent to steal
+          if (opponent.tiles.length === 0) {
+            return { success: false, errors: ['Opponent has no tiles to steal'] };
+          }
+          const randomTileIndex = Math.floor(Math.random() * opponent.tiles.length);
+          const targetTileId = opponent.tiles[randomTileIndex].id;
+          
+          const androResult = EvocationManager.executeAndromalius(player, opponent, targetTileId);
+          if (androResult.success) {
+            this.updatePlayerInGame(gameId, playerId, androResult.updatedCurrentPlayer);
+            this.updatePlayerInGame(gameId, opponent.id, androResult.updatedTargetPlayer);
+            console.log(`ANDROMALIUS evocation: ${player.name} stole tile from ${opponent.name}`);
+          }
+          return { success: androResult.success, errors: androResult.error ? [androResult.error] : [] };
+
         // ASTAROTH is handled immediately in EvocationManager.activateEvocation
-        // DANTALION, ANDROMALIUS, VALEFOR, FORNEUS would need additional UI for target selection
+        // DANTALION, VALEFOR, FORNEUS would need additional UI for target selection
 
         default:
           console.log(`Evocation ${evocationType} activated but no special effects implemented yet`);
