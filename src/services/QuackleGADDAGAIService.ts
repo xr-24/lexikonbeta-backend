@@ -26,31 +26,58 @@ export class QuackleGADDAGAIService {
   private gaddag: Gaddag | null = null;
   private dictionary: Set<string> | null = null;
   private initPromise: Promise<void> | null = null;
+  private isInitializing: boolean = false;
 
   constructor() {
-    this.initPromise = this.initialize();
+    // Don't initialize in constructor - do it lazily when needed
   }
 
   private async initialize(): Promise<void> {
+    if (this.isInitializing || (this.gaddag && this.dictionary)) {
+      return;
+    }
+
+    this.isInitializing = true;
+    
     try {
       console.log('🔥 Initializing Quackle GADDAG AI Service...');
       
       // Wait for dictionary service to be ready
       await dictionaryService.loadDictionary();
       
-      // Build GADDAG from dictionary service's internal word set
+      // Build GADDAG from dictionary service's internal word set with timeout
       console.time('GADDAG Build');
-      this.gaddag = await this.buildGaddagFromDictionaryService();
+      this.gaddag = await Promise.race([
+        this.buildGaddagFromDictionaryService(),
+        new Promise<never>((_, reject) => 
+          setTimeout(() => reject(new Error('GADDAG build timeout')), 30000)
+        )
+      ]);
       console.timeEnd('GADDAG Build');
       console.log(`✅ GADDAG built with ${this.gaddag.size} nodes`);
 
-      // Create dictionary set for Board class
-      this.dictionary = await this.getDictionarySet();
+      // Create dictionary set for Board class with timeout
+      this.dictionary = await Promise.race([
+        this.getDictionarySet(),
+        new Promise<never>((_, reject) => 
+          setTimeout(() => reject(new Error('Dictionary load timeout')), 10000)
+        )
+      ]);
       console.log(`✅ Dictionary loaded with ${this.dictionary.size} words`);
     } catch (error) {
       console.error('💀 Failed to initialize GADDAG AI:', error);
+      this.isInitializing = false;
       throw error;
+    } finally {
+      this.isInitializing = false;
     }
+  }
+
+  private async ensureInitialized(): Promise<void> {
+    if (!this.initPromise) {
+      this.initPromise = this.initialize();
+    }
+    await this.initPromise;
   }
 
   private async buildGaddagFromDictionaryService(): Promise<Gaddag> {
@@ -73,9 +100,29 @@ export class QuackleGADDAGAIService {
           console.log(`Loading dictionary from: ${localPath}`);
           const content = fs.readFileSync(localPath, 'utf8');
           const words = content.trim().split('\n').map(word => word.trim().toUpperCase());
-          for (const word of words) {
-            if (word) gaddag.addWord(word);
+          
+          console.log(`Building GADDAG from ${words.length} words...`);
+          
+          // Process words in chunks to avoid blocking the event loop
+          const CHUNK_SIZE = 1000;
+          for (let i = 0; i < words.length; i += CHUNK_SIZE) {
+            const chunk = words.slice(i, i + CHUNK_SIZE);
+            
+            // Process chunk synchronously
+            for (const word of chunk) {
+              if (word && word.length > 0) {
+                gaddag.addWord(word);
+              }
+            }
+            
+            // Yield control back to event loop every chunk
+            if (i % (CHUNK_SIZE * 10) === 0) {
+              console.log(`GADDAG progress: ${i}/${words.length} words processed`);
+              await new Promise(resolve => setImmediate(resolve));
+            }
           }
+          
+          console.log(`GADDAG build complete: ${words.length} words processed`);
           return gaddag;
         }
       }
@@ -131,10 +178,17 @@ export class QuackleGADDAGAIService {
   }
 
   async generateMove(gameState: GameState, playerId: string): Promise<AIMove> {
-    // Ensure initialization is complete
-    if (this.initPromise) {
-      await this.initPromise;
-      this.initPromise = null;
+    // Ensure initialization is complete with timeout
+    try {
+      await Promise.race([
+        this.ensureInitialized(),
+        new Promise<never>((_, reject) => 
+          setTimeout(() => reject(new Error('AI initialization timeout')), 5000)
+        )
+      ]);
+    } catch (error) {
+      console.error('AI initialization failed or timed out:', error);
+      return { type: 'PASS' };
     }
 
     const player = gameState.players.find(p => p.id === playerId);
