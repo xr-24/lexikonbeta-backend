@@ -465,7 +465,9 @@ export class EvocationManager {
       success: true,
       updatedPlayer: {
         ...player,
-        tiles: [...player.tiles, ...drawnTiles]
+        tiles: [...player.tiles, ...drawnTiles],
+        allowRackExpansion: true,
+        maxRackSize: 10
       },
       updatedBag: remainingBag
     };
