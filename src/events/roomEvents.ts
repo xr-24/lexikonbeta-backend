@@ -235,7 +235,8 @@ export function registerRoomEvents(socket: Socket, io: Server) {
           // Broadcast game start to all players in the room
           io.to(playerInRoom.room.id).emit('game-started', {
             success: true,
-            gameState: result.gameState
+            gameState: result.gameState,
+            tilePullResult: result.gameState.tilePullResult
           });
 
           // Check if first player is AI and execute their move with io instance
@@ -508,7 +509,8 @@ export function registerRoomEvents(socket: Socket, io: Server) {
         if (result.gameState) {
           io.to(result.room.id).emit('game-started', {
             success: true,
-            gameState: result.gameState
+            gameState: result.gameState,
+            tilePullResult: result.gameState.tilePullResult
           });
           gameService.checkAndExecuteAITurn(result.room.id, io);
         } else {
