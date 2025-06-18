@@ -103,7 +103,7 @@ export class GameService {
         activePowerUpForTurn: null,
         evocations: [], // Start with no evocations
         intercessions, // Populated from selectedIntercessions
-        tileColor: roomPlayer.color || '#404040',
+        tileColor: roomPlayer.isAI ? 'demonic' : (roomPlayer.color || 'angelic'),
         isAI: roomPlayer.isAI || false,
         aiPersonality: roomPlayer.aiPersonality,
         silencedTiles: [],
