@@ -76,6 +76,7 @@ export interface BoardCell {
   multiplier: MultiplierType | null;
   powerUp: PowerUp | null; // Legacy field - now stores evocations
   evocation?: Evocation | null; // New field for evocations
+  isFrozen?: boolean; // Forneus evocation - prevents building on this tile
 }
 
 export type MultiplierType = 

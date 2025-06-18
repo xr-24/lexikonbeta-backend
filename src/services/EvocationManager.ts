@@ -494,6 +494,42 @@ export class EvocationManager {
       silencedTileIds
     };
   }
+
+  static executeForneus(board: any[][], targetPositions: Array<{row: number, col: number}>): {
+    success: boolean;
+    updatedBoard: any[][];
+    error?: string;
+  } {
+    // Validate all target positions have tiles
+    for (const pos of targetPositions) {
+      if (!board[pos.row] || !board[pos.row][pos.col] || !board[pos.row][pos.col].tile) {
+        return {
+          success: false,
+          updatedBoard: board,
+          error: `No tile found at position (${pos.row}, ${pos.col})`
+        };
+      }
+    }
+
+    // Create updated board with frozen tiles
+    const updatedBoard = board.map((row, rowIndex) =>
+      row.map((cell, colIndex) => {
+        const shouldFreeze = targetPositions.some(pos => pos.row === rowIndex && pos.col === colIndex);
+        if (shouldFreeze) {
+          return {
+            ...cell,
+            isFrozen: true
+          };
+        }
+        return cell;
+      })
+    );
+
+    return {
+      success: true,
+      updatedBoard
+    };
+  }
 }
 
 export const evocationManager = new EvocationManager();

@@ -2040,8 +2040,24 @@ export class GameService {
           }
           return { success: androResult.success, errors: androResult.error ? [androResult.error] : [] };
 
+        case 'FORNEUS':
+          if (!params || !params.targetPositions || !Array.isArray(params.targetPositions)) {
+            return { success: false, errors: ['No target positions specified for Forneus'] };
+          }
+          
+          const forneusResult = EvocationManager.executeForneus(gameState.board, params.targetPositions);
+          if (forneusResult.success) {
+            const updatedGameState: GameState = {
+              ...gameState,
+              board: forneusResult.updatedBoard
+            };
+            this.games.set(gameId, updatedGameState);
+            console.log(`FORNEUS evocation: ${player.name} froze ${params.targetPositions.length} tiles`);
+          }
+          return { success: forneusResult.success, errors: forneusResult.error ? [forneusResult.error] : [] };
+
         // ASTAROTH is handled immediately in EvocationManager.activateEvocation
-        // DANTALION, VALEFOR, FORNEUS would need additional UI for target selection
+        // DANTALION, VALEFOR would need additional UI for target selection
 
         default:
           console.log(`Evocation ${evocationType} activated but no special effects implemented yet`);
