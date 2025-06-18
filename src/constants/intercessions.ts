@@ -5,7 +5,7 @@ export const INTERCESSION_DEFINITIONS: Record<IntercessionsType, Omit<Intercessi
     type: 'MICHAEL',
     name: 'Judgement of Michael',
     description: 'Directly inflicts 30 damage to the enemy\'s HP.',
-    cooldown: 3
+    cooldown: 4
   },
   SAMAEL: {
     type: 'SAMAEL',
@@ -17,25 +17,25 @@ export const INTERCESSION_DEFINITIONS: Record<IntercessionsType, Omit<Intercessi
     type: 'RAPHAEL',
     name: 'Benediction of Raphael',
     description: 'Restores 50 HP to yourself.',
-    cooldown: 4
+    cooldown: 8
   },
   URIEL: {
     type: 'URIEL',
     name: 'Protection of Uriel',
     description: 'Reduces damage received by 50% during opponent\'s next turn.',
-    cooldown: 3
+    cooldown: 4
   },
   GABRIEL: {
     type: 'GABRIEL',
     name: 'Insight of Gabriel',
     description: 'Automatically plays your highest-scoring possible word, or deals 30 damage if no word is found.',
-    cooldown: 5
+    cooldown: 6
   },
   METATRON: {
     type: 'METATRON',
     name: 'Intercession of Metatron',
     description: 'Restore 100 HP to yourself.',
-    cooldown: 6
+    cooldown: 16
   }
 };
 
