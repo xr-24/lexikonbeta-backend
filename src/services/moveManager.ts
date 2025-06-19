@@ -60,9 +60,10 @@ export class MoveManager {
   async executeMove(
     board: BoardCell[][],
     player: Player,
-    pendingTiles: PlacedTile[]
+    pendingTiles: PlacedTile[],
+    gameState?: any
   ): Promise<MoveResult> {
-    const validation = await validateMove(pendingTiles, board);
+    const validation = await validateMove(pendingTiles, board, gameState);
 
     if (!validation.isValid) {
       return {

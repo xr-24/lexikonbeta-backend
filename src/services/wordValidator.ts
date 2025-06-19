@@ -10,7 +10,8 @@ export interface ValidationResult {
 
 export async function validateMove(
   placedTiles: PlacedTile[],
-  board: BoardCell[][]
+  board: BoardCell[][],
+  gameState?: any // Optional game state for frozen tile checking
 ): Promise<ValidationResult> {
   const errors: string[] = [];
   
@@ -28,6 +29,14 @@ export async function validateMove(
   const connectionValidation = validateConnection(placedTiles, board);
   if (!connectionValidation.isValid) {
     errors.push(...connectionValidation.errors);
+  }
+
+  // Check for frozen tile violations (FORNEUS evocation)
+  if (gameState?.frozenTiles) {
+    const frozenValidation = validateFrozenTiles(placedTiles, board, gameState.frozenTiles, gameState.currentPlayerIndex, gameState.players);
+    if (!frozenValidation.isValid) {
+      errors.push(...frozenValidation.errors);
+    }
   }
 
   // Find all words formed by this move
@@ -159,6 +168,54 @@ function validateConnection(placedTiles: PlacedTile[], board: BoardCell[][]): Va
   }
 
   return { isValid: true, errors: [], words: [] };
+}
+
+function validateFrozenTiles(
+  placedTiles: PlacedTile[], 
+  board: BoardCell[][], 
+  frozenTiles: Array<{ row: number; col: number; frozenByPlayerId: string; turnsRemaining: number }>,
+  currentPlayerIndex: number,
+  players: any[]
+): ValidationResult {
+  const errors: string[] = [];
+  const currentPlayer = players[currentPlayerIndex];
+  
+  // Check if any placed tiles are adjacent to frozen tiles
+  for (const placedTile of placedTiles) {
+    const { row, col } = placedTile;
+    
+    // Check all adjacent positions
+    const adjacentPositions = [
+      [row - 1, col], [row + 1, col],
+      [row, col - 1], [row, col + 1]
+    ];
+    
+    for (const [adjRow, adjCol] of adjacentPositions) {
+      if (adjRow < 0 || adjRow >= BOARD_SIZE || adjCol < 0 || adjCol >= BOARD_SIZE) {
+        continue;
+      }
+      
+      // Check if this adjacent position has a tile and is frozen
+      if (board[adjRow][adjCol].tile) {
+        const frozenTile = frozenTiles.find(ft => 
+          ft.row === adjRow && 
+          ft.col === adjCol && 
+          ft.frozenByPlayerId !== currentPlayer.id && // Can't be frozen by the current player
+          ft.turnsRemaining > 0
+        );
+        
+        if (frozenTile) {
+          errors.push(`Cannot connect to frozen tiles! The word containing the tile at position (${adjRow + 1}, ${adjCol + 1}) is frozen.`);
+        }
+      }
+    }
+  }
+  
+  return {
+    isValid: errors.length === 0,
+    errors,
+    words: []
+  };
 }
 
 function findFormedWords(placedTiles: PlacedTile[], board: BoardCell[][]): WordPlacement[] {

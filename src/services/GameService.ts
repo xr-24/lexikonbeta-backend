@@ -310,7 +310,7 @@ export class GameService {
       return { success: false, errors: ['Invalid tile ownership'] };
     }
 
-    const moveResult = await moveManager.executeMove(gameState.board, currentPlayer, pendingTiles);
+    const moveResult = await moveManager.executeMove(gameState.board, currentPlayer, pendingTiles, gameState);
 
     if (moveResult.isValid && moveResult.score) {
       // Stamp tiles with player ID before committing to board
@@ -633,16 +633,36 @@ export class GameService {
     if (currentPlayer?.hasExtraTurn) {
       console.log(`${currentPlayer.name} has extra turn from FURFUR evocation - skipping turn advancement`);
       
-      // Clear the extra turn flag and silenced tiles
-      const updatedPlayers = gameState.players.map((p, index) =>
-        index === gameState.currentPlayerIndex 
-          ? { ...p, silencedTiles: [], hasExtraTurn: false } 
-          : p
-      );
+      // Clear the extra turn flag and silenced tiles, and refill tiles if needed
+      let updatedTileBag = gameState.tileBag;
+      const updatedPlayers = gameState.players.map((p, index) => {
+        if (index === gameState.currentPlayerIndex) {
+          // Refill tiles to standard rack size if below 7 (or maxRackSize)
+          const targetRackSize = p.maxRackSize || TILES_PER_PLAYER;
+          const tilesNeeded = Math.max(0, targetRackSize - p.tiles.length);
+          
+          if (tilesNeeded > 0) {
+            const { drawnTiles, remainingBag } = drawTiles(updatedTileBag, Math.min(tilesNeeded, updatedTileBag.length));
+            updatedTileBag = remainingBag;
+            console.log(`${p.name} refilled ${drawnTiles.length} tiles at turn end (${p.tiles.length} -> ${p.tiles.length + drawnTiles.length})`);
+            
+            return { 
+              ...p, 
+              silencedTiles: [], 
+              hasExtraTurn: false,
+              tiles: [...p.tiles, ...drawnTiles]
+            };
+          }
+          
+          return { ...p, silencedTiles: [], hasExtraTurn: false };
+        }
+        return p;
+      });
       
       const updatedGameState: GameState = {
         ...gameState,
-        players: updatedPlayers
+        players: updatedPlayers,
+        tileBag: updatedTileBag
       };
       
       this.games.set(gameId, updatedGameState);
@@ -652,11 +672,36 @@ export class GameService {
       return;
     }
 
-    // Clear silenced tiles for the player whose turn just ended
-    const clearedPlayers = gameState.players.map((p, index) =>
-      index === gameState.currentPlayerIndex ? { ...p, silencedTiles: [] } : p
-    );
-    const clearedState: GameState = { ...gameState, players: clearedPlayers };
+    // Clear silenced tiles and refill tiles for the player whose turn just ended
+    let updatedTileBag = gameState.tileBag;
+    const clearedPlayers = gameState.players.map((p, index) => {
+      if (index === gameState.currentPlayerIndex) {
+        // Refill tiles to standard rack size if below 7 (or maxRackSize)
+        const targetRackSize = p.maxRackSize || TILES_PER_PLAYER;
+        const tilesNeeded = Math.max(0, targetRackSize - p.tiles.length);
+        
+        if (tilesNeeded > 0) {
+          const { drawnTiles, remainingBag } = drawTiles(updatedTileBag, Math.min(tilesNeeded, updatedTileBag.length));
+          updatedTileBag = remainingBag;
+          console.log(`${p.name} refilled ${drawnTiles.length} tiles at turn end (${p.tiles.length} -> ${p.tiles.length + drawnTiles.length})`);
+          
+          return { 
+            ...p, 
+            silencedTiles: [],
+            tiles: [...p.tiles, ...drawnTiles]
+          };
+        }
+        
+        return { ...p, silencedTiles: [] };
+      }
+      return p;
+    });
+    
+    const clearedState: GameState = { 
+      ...gameState, 
+      players: clearedPlayers,
+      tileBag: updatedTileBag
+    };
     this.games.set(gameId, clearedState);
 
     // Reduce intercession cooldowns for all players at the end of each turn

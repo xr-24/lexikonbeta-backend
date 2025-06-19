@@ -135,6 +135,7 @@ export interface GameState {
   playersEndedGame: string[];
   moveHistory: MoveHistoryEntry[];
   tilePullResult?: TilePullResult;
+  frozenTiles?: Array<{ row: number; col: number; frozenByPlayerId: string; turnsRemaining: number }>;
 }
 
 export interface PlacedTile {
