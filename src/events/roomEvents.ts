@@ -5,6 +5,59 @@ import { ValidationUtils, RateLimiter } from '../services/validation';
 import type { CreateRoomRequest, JoinRoomRequest, SelectIntercessionsRequest } from '../types/room';
 
 export function registerRoomEvents(socket: Socket, io: Server) {
+  // Check for existing session
+  socket.on('check-session', () => {
+    try {
+      const clientIP = socket.handshake.address;
+      console.log('Session check request from IP:', clientIP);
+      
+      const session = roomManager.checkSessionByIP(clientIP);
+      
+      if (session) {
+        socket.emit('session-found', {
+          success: true,
+          session: {
+            roomCode: session.roomCode,
+            playerName: session.playerName,
+            playerId: session.playerId
+          }
+        });
+        console.log(`Session found for IP ${clientIP}: ${session.playerName} in room ${session.roomCode}`);
+      } else {
+        socket.emit('session-found', {
+          success: false,
+          message: 'No active session found'
+        });
+      }
+    } catch (error) {
+      console.error('Error in check-session:', error);
+      socket.emit('session-found', {
+        success: false,
+        error: 'An error occurred while checking session'
+      });
+    }
+  });
+
+  // Clear session (when player chooses to leave permanently)
+  socket.on('clear-session', () => {
+    try {
+      const clientIP = socket.handshake.address;
+      roomManager.clearSession(clientIP);
+      
+      socket.emit('session-cleared', {
+        success: true
+      });
+      
+      console.log(`Session cleared for IP ${clientIP}`);
+    } catch (error) {
+      console.error('Error in clear-session:', error);
+      socket.emit('session-cleared', {
+        success: false,
+        error: 'An error occurred while clearing session'
+      });
+    }
+  });
+
   // Create a new room
   socket.on('create-room', (data: CreateRoomRequest) => {
     try {
@@ -42,7 +95,8 @@ export function registerRoomEvents(socket: Socket, io: Server) {
         playerName: nameValidation.sanitized
       };
       
-      const result = roomManager.createRoom(socket.id, sanitizedData);
+      const clientIP = socket.handshake.address;
+      const result = roomManager.createRoom(socket.id, sanitizedData, clientIP);
       
       if (result.success && result.room) {
         // Join the socket to the room
@@ -127,7 +181,8 @@ export function registerRoomEvents(socket: Socket, io: Server) {
       };
       
       console.log('🔍 Attempting to join room with sanitized data:', sanitizedData);
-      const result = roomManager.joinRoom(socket.id, sanitizedData);
+      const clientIP = socket.handshake.address;
+      const result = roomManager.joinRoom(socket.id, sanitizedData, clientIP);
       console.log('🔍 Room join result:', { success: result.success, error: result.error });
       
       if (result.success && result.room) {

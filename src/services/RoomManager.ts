@@ -9,11 +9,20 @@ interface DisconnectedPlayer {
   roomId: string;
 }
 
+interface PlayerSession {
+  roomId: string;
+  playerId: string;
+  playerName: string;
+  roomCode: string;
+}
+
 export class RoomManager {
   private rooms: Map<string, Room> = new Map();
   private roomsByCode: Map<string, string> = new Map(); // code -> roomId
   private playerRooms: Map<string, string> = new Map(); // socketId -> roomId
   private disconnectedPlayers: Map<string, DisconnectedPlayer> = new Map(); // playerId -> DisconnectedPlayer
+  private playerIPs: Map<string, string> = new Map(); // playerId -> IP
+  private ipSessions: Map<string, PlayerSession> = new Map(); // IP -> session
   
   private readonly DISCONNECT_GRACE_PERIOD = 20 * 60 * 1000; // 20 minutes
   private readonly ROOM_CLEANUP_TIMEOUT = 10 * 60 * 1000; // 10 minutes
@@ -23,7 +32,7 @@ export class RoomManager {
     return Math.floor(100000 + Math.random() * 900000).toString();
   }
 
-  createRoom(hostSocketId: string, request: CreateRoomRequest): { success: boolean; room?: RoomInfo; error?: string } {
+  createRoom(hostSocketId: string, request: CreateRoomRequest, ip?: string): { success: boolean; room?: RoomInfo; error?: string } {
     // Check if player is already in a room
     if (this.playerRooms.has(hostSocketId)) {
       return { success: false, error: 'Player is already in a room' };
@@ -60,6 +69,11 @@ export class RoomManager {
     this.roomsByCode.set(roomCode, roomId);
     this.playerRooms.set(hostSocketId, roomId);
 
+    // Create session if IP is provided
+    if (ip) {
+      this.createSession(hostPlayer.id, roomId, request.playerName, roomCode, ip);
+    }
+
     console.log(`Room created: ${roomCode} by ${request.playerName}`);
 
     return {
@@ -68,7 +82,7 @@ export class RoomManager {
     };
   }
 
-  joinRoom(playerSocketId: string, request: JoinRoomRequest): { success: boolean; room?: RoomInfo; error?: string } {
+  joinRoom(playerSocketId: string, request: JoinRoomRequest, ip?: string): { success: boolean; room?: RoomInfo; error?: string } {
     console.log('🔍 RoomManager.joinRoom called with:', { playerSocketId, request });
     
     // Check if player is already in a room
@@ -151,6 +165,11 @@ export class RoomManager {
 
     room.players.push(newPlayer);
     this.playerRooms.set(playerSocketId, roomId);
+
+    // Create session if IP is provided
+    if (ip) {
+      this.createSession(newPlayer.id, roomId, request.playerName, request.roomCode, ip);
+    }
 
     console.log(`Player ${request.playerName} joined room ${request.roomCode}`);
 
@@ -618,6 +637,57 @@ export class RoomManager {
         this.disconnectedPlayers.delete(playerId);
       }
     }
+  }
+
+  // Session management methods
+  setPlayerIP(playerId: string, ip: string): void {
+    this.playerIPs.set(playerId, ip);
+  }
+
+  createSession(playerId: string, roomId: string, playerName: string, roomCode: string, ip: string): void {
+    const session: PlayerSession = {
+      roomId,
+      playerId,
+      playerName,
+      roomCode
+    };
+    
+    this.setPlayerIP(playerId, ip);
+    this.ipSessions.set(ip, session);
+    
+    console.log(`Session created for IP ${ip}: ${playerName} in room ${roomCode}`);
+  }
+
+  checkSessionByIP(ip: string): PlayerSession | null {
+    const session = this.ipSessions.get(ip);
+    if (!session) {
+      return null;
+    }
+
+    // Verify the room still exists and is active
+    const room = this.rooms.get(session.roomId);
+    if (!room || !room.isStarted) {
+      // Clean up invalid session
+      this.ipSessions.delete(ip);
+      return null;
+    }
+
+    // Check if player is still in the room or disconnected
+    const playerInRoom = room.players.find(p => p.id === session.playerId);
+    const disconnectedPlayer = this.disconnectedPlayers.get(session.playerId);
+    
+    if (!playerInRoom && !disconnectedPlayer) {
+      // Player is no longer in the game
+      this.ipSessions.delete(ip);
+      return null;
+    }
+
+    return session;
+  }
+
+  clearSession(ip: string): void {
+    this.ipSessions.delete(ip);
+    console.log(`Session cleared for IP ${ip}`);
   }
 
   // Get all rooms (for debugging)
