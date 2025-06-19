@@ -32,7 +32,7 @@ export class QuackleGADDAGAIService {
     // Don't initialize in constructor - do it lazily when needed
   }
 
-  private async initialize(): Promise<void> {
+  public async initialize(): Promise<void> {
     if (this.isInitializing || (this.gaddag && this.dictionary)) {
       return;
     }

@@ -135,11 +135,13 @@ async function initializeServer() {
     console.log('Loading dictionary...');
     await dictionaryService.loadDictionary();
     console.log(`📚 Dictionary loaded successfully with ${dictionaryService.getDictionarySize()} words`);
+
+    // Pre-warm the GADDAG AI
+    await quackleGaddagAIService.initialize();
     
-    console.log('🔥 Quackle GADDAG AI will initialize lazily when first needed');
     console.log('✅ Server initialization complete');
   } catch (error) {
-    console.error('⚠️  Warning: Failed to load dictionary:', error);
+    console.error('⚠️  Warning: Failed to load dictionary or initialize AI:', error);
     console.log('🔄 Server will continue running with limited functionality');
     // Don't exit - let the server run even if dictionary fails
   }
