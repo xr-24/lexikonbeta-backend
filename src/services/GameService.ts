@@ -107,7 +107,7 @@ export class GameService {
         name: roomPlayer.name,
         tiles: drawnTiles,
         score: 0,
-        hp: 300, // All players start with 300 HP
+        hp: 250, // All players start with 250 HP
         hasEndedGame: false,
         activePowerUps: [],
         activePowerUpForTurn: null,
@@ -357,8 +357,8 @@ export class GameService {
       if (moveResult.collectedPowerUps && moveResult.collectedPowerUps.length > 0) {
         moveResult.collectedPowerUps.forEach(powerUp => {
           if (updatedPlayer.isAI) {
-            // AI gets 20 HP healing per evocation (max 300 HP)
-            updatedPlayer.hp = Math.min(300, updatedPlayer.hp + 20);
+            // AI gets 20 HP healing per evocation (max 250 HP)
+            updatedPlayer.hp = Math.min(250, updatedPlayer.hp + 20);
             console.log(`AI ${updatedPlayer.name} collected evocation and healed 20 HP (${updatedPlayer.hp - 20} -> ${updatedPlayer.hp})`);
           } else {
             // Human gets evocation ability - convert PowerUp to Evocation
@@ -1655,9 +1655,9 @@ export class GameService {
       return { success: false, errors: ['Player not found'], intercessionType: 'RAPHAEL' };
     }
 
-    // Heal 50 HP (max 300)
+    // Heal 50 HP (max 250)
     const healing = 50;
-    const newHP = Math.min(300, player.hp + healing);
+    const newHP = Math.min(250, player.hp + healing);
 
     const updatedPlayers = gameState.players.map(p => {
       if (p.id === playerId) {
@@ -1824,9 +1824,9 @@ export class GameService {
       return { success: false, errors: ['Player not found'], intercessionType: 'METATRON' };
     }
 
-    // Heal 100 HP (max 300)
+    // Heal 100 HP (max 250)
     const healing = 100;
-    const newHP = Math.min(300, player.hp + healing);
+    const newHP = Math.min(250, player.hp + healing);
 
     const updatedPlayers = gameState.players.map(p => {
       if (p.id === playerId) {
