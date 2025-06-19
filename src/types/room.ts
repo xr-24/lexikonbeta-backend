@@ -21,8 +21,9 @@ export interface RoomPlayer {
   color?: string;
   isAI?: boolean;
   aiPersonality?: string;
-  selectedIntercessions?: IntercessionsType[];
+  selectedIntercessions?: string[];
   intercessionsSelected?: boolean;
+  hasSelectedIntercessions?: boolean;
 }
 
 export interface CreateRoomRequest {

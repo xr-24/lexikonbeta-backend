@@ -560,6 +560,7 @@ export class RoomManager {
     // Update player's intercession selection
     player.selectedIntercessions = request.intercessionTypes;
     player.intercessionsSelected = true;
+    player.hasSelectedIntercessions = true;
 
     console.log(`Player ${player.name} selected intercessions: ${request.intercessionTypes.join(', ')} in room ${room.code}`);
 
