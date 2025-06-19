@@ -1,4 +1,4 @@
-import type { GameState, Player, Tile, PlacedTile, MoveHistoryEntry, PowerUp, IntercessionsType } from '../types/game';
+import type { GameState, Player, Tile, PlacedTile, MoveHistoryEntry, PowerUp, IntercessionsType, EvocationType } from '../types/game';
 import { createEmptyBoard } from '../constants/board';
 import { createTileBag, drawTiles, TILES_PER_PLAYER } from '../constants/tiles';
 import { createPlayerIntercessions } from '../constants/intercessions';
@@ -1934,8 +1934,107 @@ export class GameService {
     return { success: true, errors: [] };
   }
 
-  // Execute evocation effects that require game state access
-  async executeEvocationEffects(gameId: string, playerId: string, evocationType: string, params?: any): Promise<{ success: boolean; errors: string[] }> {
+  // Activate evocation - handles immediate effects and sets up pending state for user input
+  activateEvocation(gameId: string, playerId: string, evocationId: string): { success: boolean; errors: string[]; requiresUserInput?: boolean; inputType?: string } {
+    const gameState = this.games.get(gameId);
+    if (!gameState) {
+      return { success: false, errors: ['Game not found'] };
+    }
+
+    const player = gameState.players.find(p => p.id === playerId);
+    if (!player) {
+      return { success: false, errors: ['Player not found'] };
+    }
+
+    // Use EvocationManager to activate the evocation
+    const result = EvocationManager.activateEvocation(player, evocationId);
+    
+    if (result.success) {
+      // Update the player in game state
+      this.updatePlayerInGame(gameId, playerId, result.updatedPlayer);
+      
+      // If evocation doesn't require user input, execute it immediately
+      if (!result.requiresUserInput && result.activatedEvocation) {
+        const executeResult = this.executeEvocationEffects(gameId, playerId, result.activatedEvocation.type);
+        return {
+          success: executeResult.success,
+          errors: executeResult.errors
+        };
+      }
+      
+      return {
+        success: true,
+        errors: [],
+        requiresUserInput: result.requiresUserInput,
+        inputType: result.inputType
+      };
+    }
+    
+    return {
+      success: false,
+      errors: [result.error || 'Failed to activate evocation']
+    };
+  }
+
+  // Resolve evocation with user input
+  resolveEvocation(gameId: string, playerId: string, userInput: any): { success: boolean; errors: string[] } {
+    const gameState = this.games.get(gameId);
+    if (!gameState) {
+      return { success: false, errors: ['Game not found'] };
+    }
+
+    const player = gameState.players.find(p => p.id === playerId);
+    if (!player || !player.pendingEvocation) {
+      return { success: false, errors: ['No pending evocation found'] };
+    }
+
+    const opponent = gameState.players.find(p => p.id !== playerId && !p.hasEndedGame);
+    
+    // Execute the evocation with user input
+    const result = EvocationManager.executeEvocation(
+      player.pendingEvocation.evocationType,
+      player,
+      opponent || null,
+      gameState.tileBag,
+      gameState.board,
+      userInput
+    );
+
+    if (result.success) {
+      // Clear pending evocation
+      const clearedPlayer = { ...result.updatedCurrentPlayer, pendingEvocation: undefined };
+      
+      // Update all affected game state
+      let updatedPlayers = gameState.players.map(p => {
+        if (p.id === playerId) return clearedPlayer;
+        if (p.id === opponent?.id && result.updatedOpponent) return result.updatedOpponent;
+        return p;
+      });
+
+      let updatedGameState: GameState = {
+        ...gameState,
+        players: updatedPlayers
+      };
+
+      if (result.updatedTileBag) {
+        updatedGameState.tileBag = result.updatedTileBag;
+      }
+
+      if (result.updatedBoard) {
+        updatedGameState.board = result.updatedBoard;
+      }
+
+      this.games.set(gameId, updatedGameState);
+      
+      console.log(`${player.pendingEvocation.evocationType} evocation resolved for ${player.name}`);
+      return { success: true, errors: [] };
+    }
+
+    return { success: false, errors: [result.error || 'Failed to execute evocation'] };
+  }
+
+  // Execute evocation effects that don't require user input
+  executeEvocationEffects(gameId: string, playerId: string, evocationType: EvocationType): { success: boolean; errors: string[] } {
     const gameState = this.games.get(gameId);
     if (!gameState) {
       return { success: false, errors: ['Game not found'] };
@@ -1947,149 +2046,44 @@ export class GameService {
     }
 
     const opponent = gameState.players.find(p => p.id !== playerId && !p.hasEndedGame);
+    
+    // Execute the evocation
+    const result = EvocationManager.executeEvocation(
+      evocationType,
+      player,
+      opponent || null,
+      gameState.tileBag,
+      gameState.board
+    );
 
-    try {
-      switch (evocationType) {
-        case 'MURMUR':
-          if (!opponent) {
-            return { success: false, errors: ['No valid opponent found'] };
-          }
-          const murmurResult = EvocationManager.executeMurmur(opponent);
-          if (murmurResult.success) {
-            const updatedOpponent = { ...opponent, silencedTiles: murmurResult.silencedTileIds };
-            this.updatePlayerInGame(gameId, opponent.id, updatedOpponent);
-            console.log(`MURMUR evocation: Silenced tiles ${murmurResult.silencedTileIds.join(', ')} for player ${opponent.name}`);
-          }
-          return { success: murmurResult.success, errors: murmurResult.error ? [murmurResult.error] : [] };
+    if (result.success) {
+      // Update all affected game state
+      let updatedPlayers = gameState.players.map(p => {
+        if (p.id === playerId) return result.updatedCurrentPlayer;
+        if (p.id === opponent?.id && result.updatedOpponent) return result.updatedOpponent;
+        return p;
+      });
 
-        case 'AIM':
-          if (!opponent) {
-            return { success: false, errors: ['No valid opponent found'] };
-          }
-          // For AIM, we need to randomly select 2 tiles from opponent
-          const opponentTileIds = opponent.tiles.slice(0, 2).map(t => t.id);
-          if (opponentTileIds.length < 2) {
-            return { success: false, errors: ['Opponent does not have enough tiles'] };
-          }
-          const aimResult = EvocationManager.executeAim(opponent, opponentTileIds);
-          if (aimResult.success) {
-            this.updatePlayerInGame(gameId, opponent.id, aimResult.updatedPlayer);
-            console.log(`AIM evocation: Removed 2 tiles from ${opponent.name}`);
-          }
-          return { success: aimResult.success, errors: aimResult.error ? [aimResult.error] : [] };
+      let updatedGameState: GameState = {
+        ...gameState,
+        players: updatedPlayers
+      };
 
-        case 'BUNE':
-          // Swap player tiles with guaranteed vowels
-          const buneResult = EvocationManager.swapPlayerTiles(player, gameState.tileBag);
-          const { finalTiles, updatedBag } = EvocationManager.guaranteeVowelsInDraw(buneResult.updatedPlayer.tiles, buneResult.updatedBag);
-          
-          // Update game state with new bag FIRST
-          const updatedGameState: GameState = { ...gameState, tileBag: updatedBag };
-          this.games.set(gameId, updatedGameState);
-          
-          // THEN update the player
-          const updatedPlayer = { ...buneResult.updatedPlayer, tiles: finalTiles };
-          this.updatePlayerInGame(gameId, playerId, updatedPlayer);
-          
-          console.log(`BUNE evocation: Swapped tiles for ${player.name} with guaranteed vowels`);
-          return { success: true, errors: [] };
-
-        case 'GREMORY':
-          if (!opponent) {
-            return { success: false, errors: ['No valid opponent found'] };
-          }
-          const gremoryResult = EvocationManager.swapTilesWithOpponent(player, opponent);
-          this.updatePlayerInGame(gameId, playerId, gremoryResult.updatedPlayer1);
-          this.updatePlayerInGame(gameId, opponent.id, gremoryResult.updatedPlayer2);
-          console.log(`GREMORY evocation: Swapped tiles between ${player.name} and ${opponent.name}`);
-          return { success: true, errors: [] };
-
-        case 'HAAGENTI':
-          const haagenResult = EvocationManager.executeHaagenti(player, gameState.tileBag);
-          if (haagenResult.success) {
-            // Set rack expansion flags for UI display
-            const expandedPlayer = {
-              ...haagenResult.updatedPlayer,
-              allowRackExpansion: true,
-              maxRackSize: 10
-            };
-            this.updatePlayerInGame(gameId, playerId, expandedPlayer);
-            const updatedGameStateHaag: GameState = { ...gameState, tileBag: haagenResult.updatedBag };
-            this.games.set(gameId, updatedGameStateHaag);
-            console.log(`HAAGENTI evocation: Added 3 tiles to ${player.name}'s rack and expanded to 10 slots`);
-          }
-          return { success: haagenResult.success, errors: haagenResult.error ? [haagenResult.error] : [] };
-
-        case 'DANTALION':
-          if (!params || typeof params.sourceTileId !== 'string') {
-            return { success: false, errors: ['No source tile specified'] };
-          }
-          const dupResult = PowerUpManager.executeDuplicate(player, params.sourceTileId);
-          if (dupResult.success) {
-            this.updatePlayerInGame(gameId, playerId, dupResult.updatedPlayer);
-            console.log(`DANTALION evocation: Duplicated tile ${params.sourceTileId} for ${player.name}`);
-          }
-          return { success: dupResult.success, errors: dupResult.error ? [dupResult.error] : [] };
-
-        case 'OROBAS':
-          // OROBAS allows unlimited tile reuse - this is handled during move validation
-          console.log(`OROBAS evocation: ${player.name} can reuse tiles unlimited times this turn`);
-          return { success: true, errors: [] };
-
-        case 'FURFUR':
-          // FURFUR grants extra turn - set flag on player
-          const updatedPlayerFurfur = { ...player, hasExtraTurn: true };
-          this.updatePlayerInGame(gameId, playerId, updatedPlayerFurfur);
-          console.log(`FURFUR evocation: ${player.name} will get an extra turn`);
-          return { success: true, errors: [] };
-
-        case 'ANDROMALIUS':
-          if (!opponent) {
-            return { success: false, errors: ['No valid opponent found'] };
-          }
-          // For ANDROMALIUS, we need to randomly select 1 tile from opponent to steal
-          if (opponent.tiles.length === 0) {
-            return { success: false, errors: ['Opponent has no tiles to steal'] };
-          }
-          const randomTileIndex = Math.floor(Math.random() * opponent.tiles.length);
-          const targetTileId = opponent.tiles[randomTileIndex].id;
-          
-          const androResult = EvocationManager.executeAndromalius(player, opponent, targetTileId);
-          if (androResult.success) {
-            this.updatePlayerInGame(gameId, playerId, androResult.updatedCurrentPlayer);
-            this.updatePlayerInGame(gameId, opponent.id, androResult.updatedTargetPlayer);
-            console.log(`ANDROMALIUS evocation: ${player.name} stole tile from ${opponent.name}`);
-          }
-          return { success: androResult.success, errors: androResult.error ? [androResult.error] : [] };
-
-        case 'FORNEUS':
-          if (!params || !params.targetPositions || !Array.isArray(params.targetPositions)) {
-            return { success: false, errors: ['No target positions specified for Forneus'] };
-          }
-          
-          const forneusResult = EvocationManager.executeForneus(gameState.board, params.targetPositions);
-          if (forneusResult.success) {
-            const updatedGameState: GameState = {
-              ...gameState,
-              board: forneusResult.updatedBoard
-            };
-            this.games.set(gameId, updatedGameState);
-            console.log(`FORNEUS evocation: ${player.name} froze ${params.targetPositions.length} tiles`);
-          }
-          return { success: forneusResult.success, errors: forneusResult.error ? [forneusResult.error] : [] };
-
-        // ASTAROTH is handled immediately in EvocationManager.activateEvocation
-        // DANTALION, VALEFOR would need additional UI for target selection
-
-        default:
-          console.log(`Evocation ${evocationType} activated but no special effects implemented yet`);
-          return { success: true, errors: [] };
+      if (result.updatedTileBag) {
+        updatedGameState.tileBag = result.updatedTileBag;
       }
-    } catch (error) {
-      console.error(`Error executing evocation ${evocationType}:`, error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      return { success: false, errors: [`Failed to execute evocation: ${errorMessage}`] };
+
+      if (result.updatedBoard) {
+        updatedGameState.board = result.updatedBoard;
+      }
+
+      this.games.set(gameId, updatedGameState);
+      
+      console.log(`${evocationType} evocation executed for ${player.name}`);
+      return { success: true, errors: [] };
     }
+
+    return { success: false, errors: [result.error || 'Failed to execute evocation'] };
   }
 }
 

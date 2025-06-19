@@ -815,31 +815,22 @@ export function registerGameEvents(socket: Socket, io: Server) {
         return;
       }
 
-      // Execute the evocation through EvocationManager
-      const { EvocationManager } = await import('../services/EvocationManager');
-      const result = EvocationManager.activateEvocation(player, data.evocationId);
+      // Use the new GameService method to activate evocation
+      const result = gameService.activateEvocation(context.roomId, context.player.id, data.evocationId);
       
       if (result.success) {
-        // Update the player in game state through GameService method
-        const updateResult = gameService.updatePlayerInGame(context.roomId, context.player.id, result.updatedPlayer);
+        socket.emit('activate-evocation-response', {
+          success: true,
+          requiresUserInput: result.requiresUserInput,
+          inputType: result.inputType,
+          message: result.requiresUserInput ? 'Evocation activated, waiting for user input' : 'Evocation activated successfully'
+        });
         
-        if (updateResult.success) {
-          // Get evocation type from the activated evocation
-          const activatedEvocation = result.activatedEvocation;
-          const evocationType = activatedEvocation?.type || 'UNKNOWN';
-          
-          // Execute evocation-specific effects that require game state access
-          const effectsResult = await gameService.executeEvocationEffects(context.roomId, context.player.id, evocationType, data.params);
-          
-          if (effectsResult.success) {
-            socket.emit('activate-evocation-response', {
-              success: true,
-              message: 'Evocation activated successfully'
-            });
-            
-            // Add evocation to move history
-            const evocationName = evocationType !== 'UNKNOWN' ? EvocationManager.getEvocationName(evocationType) : 'Unknown Evocation';
-            const evocationDescription = evocationType !== 'UNKNOWN' ? EvocationManager.getEvocationDescription(evocationType) : 'Unknown evocation effect';
+        // If evocation doesn't require user input, add to move history and broadcast
+        if (!result.requiresUserInput) {
+          // Get the evocation that was activated to get its name and description
+          const activatedEvocation = player.evocations.find((e: any) => e.id === data.evocationId);
+          if (activatedEvocation) {
             gameService.addMoveToHistory(
               context.roomId,
               context.player.id,
@@ -849,39 +840,33 @@ export function registerGameEvents(socket: Socket, io: Server) {
               0,
               {
                 spellType: 'EVOCATION',
-                spellName: evocationName,
-                spellEffect: evocationDescription
+                spellName: activatedEvocation.name,
+                spellEffect: activatedEvocation.description
               }
             );
-            
-            // Broadcast updated game state to all players
-            broadcastGameState(context.roomId);
-            
-            // Broadcast evocation activation to all players
-            io.to(context.roomId).emit('evocation-activated', {
-              playerId: context.player.id,
-              playerName: context.player.name,
-              evocationId: data.evocationId,
-              evocationType: evocationType
-            });
-            
-            console.log(`Player ${context.player.name} activated evocation ${evocationType}`);
-          } else {
-            socket.emit('activate-evocation-response', {
-              success: false,
-              error: effectsResult.errors.join(', ') || 'Failed to execute evocation effects'
-            });
           }
-        } else {
-          socket.emit('activate-evocation-response', {
-            success: false,
-            error: 'Failed to update game state'
+          
+          // Broadcast updated game state to all players
+          broadcastGameState(context.roomId);
+          
+          // Broadcast evocation activation to all players
+          io.to(context.roomId).emit('evocation-activated', {
+            playerId: context.player.id,
+            playerName: context.player.name,
+            evocationId: data.evocationId,
+            evocationType: activatedEvocation?.type
           });
+          
+          console.log(`Player ${context.player.name} activated evocation ${activatedEvocation?.type}`);
+        } else {
+          // Just broadcast the updated game state (with pendingEvocation set)
+          broadcastGameState(context.roomId);
+          console.log(`Player ${context.player.name} activated evocation ${data.evocationId}, waiting for user input (${result.inputType})`);
         }
       } else {
         socket.emit('activate-evocation-response', {
           success: false,
-          error: result.error || 'Failed to activate evocation'
+          error: result.errors.join(', ') || 'Failed to activate evocation'
         });
       }
     } catch (error) {
@@ -889,6 +874,104 @@ export function registerGameEvents(socket: Socket, io: Server) {
       socket.emit('activate-evocation-response', {
         success: false,
         error: 'An error occurred while activating the evocation'
+      });
+    }
+  });
+
+  // Resolve evocation with user input
+  socket.on('resolve-evocation', async (data: { userInput: any }) => {
+    try {
+      // Rate limiting
+      if (!RateLimiter.checkLimit(socket.id, 'resolve-evocation', 2, 5000)) { // 2 per 5 seconds
+        socket.emit('resolve-evocation-response', {
+          success: false,
+          error: 'Please wait before resolving another evocation'
+        });
+        return;
+      }
+
+      console.log('Resolve evocation request:', data);
+      
+      const context = getPlayerGameContext(socket.id);
+      if (!context) {
+        socket.emit('resolve-evocation-response', {
+          success: false,
+          error: 'Not in an active game'
+        });
+        return;
+      }
+
+      // Check if it's the player's turn
+      const currentPlayer = context.gameState.players[context.gameState.currentPlayerIndex];
+      if (currentPlayer.id !== context.player.id) {
+        socket.emit('resolve-evocation-response', {
+          success: false,
+          error: 'Not your turn'
+        });
+        return;
+      }
+
+      // Check if player has a pending evocation
+      const player = context.gameState.players.find((p: any) => p.id === context.player.id);
+      if (!player || !player.pendingEvocation) {
+        socket.emit('resolve-evocation-response', {
+          success: false,
+          error: 'No pending evocation to resolve'
+        });
+        return;
+      }
+
+      // Use the new GameService method to resolve evocation
+      const result = gameService.resolveEvocation(context.roomId, context.player.id, data.userInput);
+      
+      if (result.success) {
+        socket.emit('resolve-evocation-response', {
+          success: true,
+          message: 'Evocation resolved successfully'
+        });
+        
+        // Add evocation to move history
+        const evocationType = player.pendingEvocation.evocationType;
+        const { EvocationManager } = await import('../services/EvocationManager');
+        const evocationName = EvocationManager.getEvocationName(evocationType);
+        const evocationDescription = EvocationManager.getEvocationDescription(evocationType);
+        
+        gameService.addMoveToHistory(
+          context.roomId,
+          context.player.id,
+          context.player.name,
+          'EVOCATION',
+          [],
+          0,
+          {
+            spellType: 'EVOCATION',
+            spellName: evocationName,
+            spellEffect: evocationDescription
+          }
+        );
+        
+        // Broadcast updated game state to all players
+        broadcastGameState(context.roomId);
+        
+        // Broadcast evocation resolution to all players
+        io.to(context.roomId).emit('evocation-resolved', {
+          playerId: context.player.id,
+          playerName: context.player.name,
+          evocationType: evocationType
+        });
+        
+        console.log(`Player ${context.player.name} resolved evocation ${evocationType}`);
+      } else {
+        socket.emit('resolve-evocation-response', {
+          success: false,
+          error: result.errors.join(', ') || 'Failed to resolve evocation'
+        });
+      }
+    } catch (error) {
+      console.error('Error in resolve-evocation:', error);
+      socket.emit('resolve-evocation-response', {
+        success: false,
+        error: 'An error occurred while resolving the evocation'
       });
     }
   });

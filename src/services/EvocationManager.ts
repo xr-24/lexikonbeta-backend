@@ -116,7 +116,7 @@ export class EvocationManager {
   static activateEvocation(
     player: Player,
     evocationId: string
-  ): { success: boolean; updatedPlayer: Player; activatedEvocation?: Evocation; error?: string; requiresGameStateUpdate?: boolean; gameStateUpdates?: any } {
+  ): { success: boolean; updatedPlayer: Player; activatedEvocation?: Evocation; error?: string; requiresUserInput?: boolean; inputType?: string } {
     const evocationIndex = player.evocations.findIndex(e => e.id === evocationId);
     
     if (evocationIndex === -1) {
@@ -136,24 +136,70 @@ export class EvocationManager {
       evocations: updatedEvocations
     };
 
-    // Execute evocation-specific effects that can be handled immediately
-    // Note: Some evocations like MURMUR, AIM, ANDROMALIUS, VALEFOR require game state access
-    // and will be handled by the GameService after this method returns
+    // Check if evocation requires user input
     switch (evocation.type) {
+      case 'DANTALION':
+        // Requires player to select which tile to duplicate
+        updatedPlayer.pendingEvocation = {
+          evocationType: evocation.type,
+          evocationId: evocation.id,
+          requiresInput: 'TILE_SELECTION'
+        };
+        return {
+          success: true,
+          updatedPlayer,
+          activatedEvocation: evocation,
+          requiresUserInput: true,
+          inputType: 'TILE_SELECTION'
+        };
+
+      case 'FORNEUS':
+        // Requires player to select which board tile to freeze
+        updatedPlayer.pendingEvocation = {
+          evocationType: evocation.type,
+          evocationId: evocation.id,
+          requiresInput: 'BOARD_POSITION'
+        };
+        return {
+          success: true,
+          updatedPlayer,
+          activatedEvocation: evocation,
+          requiresUserInput: true,
+          inputType: 'BOARD_POSITION'
+        };
+
+      case 'ANDROMALIUS':
+        // Requires player to select which opponent tile to steal
+        updatedPlayer.pendingEvocation = {
+          evocationType: evocation.type,
+          evocationId: evocation.id,
+          requiresInput: 'OPPONENT_TILE'
+        };
+        return {
+          success: true,
+          updatedPlayer,
+          activatedEvocation: evocation,
+          requiresUserInput: true,
+          inputType: 'OPPONENT_TILE'
+        };
+
+      // Evocations that can be executed immediately
       case 'ASTAROTH':
         // Add blank tile to rack
         updatedPlayer = this.addBlankTileToRack(updatedPlayer);
         break;
-      case 'DANTALION':
-        // For now, we'll need the GameService to handle this since it needs tile selection
-        // This will be handled in the GameService after activation
-        break;
+
       case 'FURFUR':
-        // Extra turn - this will be handled by game flow logic
+        // Grant extra turn
+        updatedPlayer.hasExtraTurn = true;
         break;
-      // Other evocations that need special handling will be processed by GameService
+
+      case 'OROBAS':
+        // This is handled via game modifiers during move validation
+        break;
+
+      // Other evocations will be handled by executeEvocation method
       default:
-        // Most evocations require game state access and will be handled by GameService
         break;
     }
 
@@ -161,7 +207,7 @@ export class EvocationManager {
       success: true,
       updatedPlayer,
       activatedEvocation: evocation,
-      requiresGameStateUpdate: true
+      requiresUserInput: false
     };
   }
 
@@ -531,6 +577,173 @@ export class EvocationManager {
       success: true,
       updatedBoard
     };
+  }
+
+  // New unified method to execute evocations with all necessary game state
+  static executeEvocation(
+    evocationType: EvocationType,
+    currentPlayer: Player,
+    opponent: Player | null,
+    tileBag: Tile[],
+    board: any[][],
+    userInput?: any
+  ): {
+    success: boolean;
+    updatedCurrentPlayer: Player;
+    updatedOpponent?: Player;
+    updatedTileBag?: Tile[];
+    updatedBoard?: any[][];
+    error?: string;
+  } {
+    switch (evocationType) {
+      case 'BUNE':
+        // Fix: Complete rack replacement with guaranteed vowels
+        const buneResult = this.swapPlayerTiles(currentPlayer, tileBag);
+        const { finalTiles, updatedBag } = this.guaranteeVowelsInDraw(buneResult.updatedPlayer.tiles, buneResult.updatedBag);
+        return {
+          success: true,
+          updatedCurrentPlayer: {
+            ...buneResult.updatedPlayer,
+            tiles: finalTiles
+          },
+          updatedTileBag: updatedBag
+        };
+
+      case 'GREMORY':
+        if (!opponent) {
+          return {
+            success: false,
+            updatedCurrentPlayer: currentPlayer,
+            error: 'No opponent found for Gremory'
+          };
+        }
+        const gremoryResult = this.swapTilesWithOpponent(currentPlayer, opponent);
+        return {
+          success: true,
+          updatedCurrentPlayer: gremoryResult.updatedPlayer1,
+          updatedOpponent: gremoryResult.updatedPlayer2
+        };
+
+      case 'AIM':
+        if (!opponent) {
+          return {
+            success: false,
+            updatedCurrentPlayer: currentPlayer,
+            error: 'No opponent found for Aim'
+          };
+        }
+        // Randomly select 2 tiles from opponent
+        const opponentTileIds = opponent.tiles.slice(0, 2).map(t => t.id);
+        if (opponentTileIds.length < 2) {
+          return {
+            success: false,
+            updatedCurrentPlayer: currentPlayer,
+            error: 'Opponent does not have enough tiles'
+          };
+        }
+        const aimResult = this.executeAim(opponent, opponentTileIds);
+        return {
+          success: aimResult.success,
+          updatedCurrentPlayer: currentPlayer,
+          updatedOpponent: aimResult.updatedPlayer,
+          error: aimResult.error
+        };
+
+      case 'ANDROMALIUS':
+        if (!opponent || !userInput?.targetTileId) {
+          return {
+            success: false,
+            updatedCurrentPlayer: currentPlayer,
+            error: 'No opponent or target tile specified for Andromalius'
+          };
+        }
+        const androResult = this.executeAndromalius(currentPlayer, opponent, userInput.targetTileId);
+        return {
+          success: androResult.success,
+          updatedCurrentPlayer: androResult.updatedCurrentPlayer,
+          updatedOpponent: androResult.updatedTargetPlayer,
+          error: androResult.error
+        };
+
+      case 'DANTALION':
+        if (!userInput?.sourceTileId) {
+          return {
+            success: false,
+            updatedCurrentPlayer: currentPlayer,
+            error: 'No source tile specified for Dantalion'
+          };
+        }
+        const dantalionResult = this.executeDantalion(currentPlayer, userInput.sourceTileId);
+        return {
+          success: dantalionResult.success,
+          updatedCurrentPlayer: dantalionResult.updatedPlayer,
+          error: dantalionResult.error
+        };
+
+      case 'FORNEUS':
+        if (!userInput?.targetPosition) {
+          return {
+            success: false,
+            updatedCurrentPlayer: currentPlayer,
+            error: 'No target position specified for Forneus'
+          };
+        }
+        const forneusResult = this.executeForneus(board, [userInput.targetPosition]);
+        return {
+          success: forneusResult.success,
+          updatedCurrentPlayer: currentPlayer,
+          updatedBoard: forneusResult.updatedBoard,
+          error: forneusResult.error
+        };
+
+      case 'MURMUR':
+        if (!opponent) {
+          return {
+            success: false,
+            updatedCurrentPlayer: currentPlayer,
+            error: 'No opponent found for Murmur'
+          };
+        }
+        const murmurResult = this.executeMurmur(opponent);
+        if (murmurResult.success) {
+          return {
+            success: true,
+            updatedCurrentPlayer: currentPlayer,
+            updatedOpponent: {
+              ...opponent,
+              silencedTiles: murmurResult.silencedTileIds
+            }
+          };
+        }
+        return {
+          success: false,
+          updatedCurrentPlayer: currentPlayer,
+          error: murmurResult.error
+        };
+
+      case 'HAAGENTI':
+        const haagenResult = this.executeHaagenti(currentPlayer, tileBag);
+        return {
+          success: haagenResult.success,
+          updatedCurrentPlayer: haagenResult.updatedPlayer,
+          updatedTileBag: haagenResult.updatedBag,
+          error: haagenResult.error
+        };
+
+      case 'VALEFOR':
+        // TODO: Implement multiplier stealing logic
+        return {
+          success: true,
+          updatedCurrentPlayer: currentPlayer
+        };
+
+      default:
+        return {
+          success: false,
+          updatedCurrentPlayer: currentPlayer,
+          error: `Evocation ${evocationType} not implemented`
+        };
+    }
   }
 }
 

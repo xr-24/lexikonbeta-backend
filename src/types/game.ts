@@ -108,6 +108,11 @@ export interface Player {
   hasExtraTurn?: boolean;        // FURFUR evocation grants extra turn
   allowRackExpansion?: boolean;  // HAAGENTI/ANDROMALIUS allows rack expansion
   maxRackSize?: number;          // Maximum rack size (7 default, 8 for ANDROMALIUS, 10 for HAAGENTI)
+  pendingEvocation?: {           // Evocation waiting for user input
+    evocationType: EvocationType;
+    evocationId: string;
+    requiresInput: 'TILE_SELECTION' | 'BOARD_POSITION' | 'OPPONENT_TILE';
+  };
 }
 
 export interface TilePullResult {
