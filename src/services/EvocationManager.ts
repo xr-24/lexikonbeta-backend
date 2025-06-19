@@ -183,6 +183,21 @@ export class EvocationManager {
           inputType: 'OPPONENT_TILE'
         };
 
+      case 'VALEFOR':
+        // Requires player to select which board multiplier to steal
+        updatedPlayer.pendingEvocation = {
+          evocationType: evocation.type,
+          evocationId: evocation.id,
+          requiresInput: 'BOARD_POSITION'
+        };
+        return {
+          success: true,
+          updatedPlayer,
+          activatedEvocation: evocation,
+          requiresUserInput: true,
+          inputType: 'BOARD_POSITION'
+        };
+
       // Evocations that can be executed immediately
       case 'ASTAROTH':
         // Add blank tile to rack
