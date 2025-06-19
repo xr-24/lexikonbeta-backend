@@ -579,6 +579,57 @@ export class EvocationManager {
     };
   }
 
+  static executeValefor(board: any[][], targetPosition: {row: number, col: number}): {
+    success: boolean;
+    updatedBoard: any[][];
+    stolenMultiplier?: {type: 'DOUBLE_WORD' | 'TRIPLE_WORD', position: {row: number, col: number}};
+    error?: string;
+  } {
+    // Validate target position exists and has a multiplier
+    const targetCell = board[targetPosition.row]?.[targetPosition.col];
+    if (!targetCell) {
+      return {
+        success: false,
+        updatedBoard: board,
+        error: 'Invalid board position'
+      };
+    }
+
+    // Check if the cell has a multiplier and no tile
+    if (!targetCell.multiplier || targetCell.tile) {
+      return {
+        success: false,
+        updatedBoard: board,
+        error: 'No available multiplier at target position'
+      };
+    }
+
+    // Steal the multiplier
+    const stolenMultiplier = {
+      type: targetCell.multiplier as 'DOUBLE_WORD' | 'TRIPLE_WORD',
+      position: targetPosition
+    };
+
+    // Remove multiplier from board
+    const updatedBoard = board.map((row, rowIndex) =>
+      row.map((cell, colIndex) => {
+        if (rowIndex === targetPosition.row && colIndex === targetPosition.col) {
+          return {
+            ...cell,
+            multiplier: null // Remove the multiplier
+          };
+        }
+        return cell;
+      })
+    );
+
+    return {
+      success: true,
+      updatedBoard,
+      stolenMultiplier
+    };
+  }
+
   // New unified method to execute evocations with all necessary game state
   static executeEvocation(
     evocationType: EvocationType,
@@ -755,10 +806,22 @@ export class EvocationManager {
         };
 
       case 'VALEFOR':
-        // TODO: Implement multiplier stealing logic
+        if (!userInput?.targetPosition) {
+          return {
+            success: false,
+            updatedCurrentPlayer: currentPlayer,
+            error: 'No target position specified for Valefor'
+          };
+        }
+        const valeforResult = this.executeValefor(board, userInput.targetPosition);
         return {
-          success: true,
-          updatedCurrentPlayer: currentPlayer
+          success: valeforResult.success,
+          updatedCurrentPlayer: valeforResult.success ? {
+            ...currentPlayer,
+            stolenMultiplier: valeforResult.stolenMultiplier
+          } : currentPlayer,
+          updatedBoard: valeforResult.updatedBoard,
+          error: valeforResult.error
         };
 
       default:

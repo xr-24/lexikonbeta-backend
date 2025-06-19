@@ -113,6 +113,10 @@ export interface Player {
     evocationId: string;
     requiresInput: 'TILE_SELECTION' | 'BOARD_POSITION' | 'OPPONENT_TILE';
   };
+  stolenMultiplier?: {           // VALEFOR evocation - stolen multiplier to use
+    type: 'DOUBLE_WORD' | 'TRIPLE_WORD';
+    position: { row: number; col: number };
+  };
 }
 
 export interface TilePullResult {
