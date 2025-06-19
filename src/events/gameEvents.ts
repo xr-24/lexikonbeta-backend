@@ -879,7 +879,7 @@ export function registerGameEvents(socket: Socket, io: Server) {
   });
 
   // Resolve evocation with user input
-  socket.on('resolve-evocation', async (data: { userInput: any }) => {
+  socket.on('resolve-evocation', async (data: { params: any }) => {
     try {
       // Rate limiting
       if (!RateLimiter.checkLimit(socket.id, 'resolve-evocation', 2, 5000)) { // 2 per 5 seconds
@@ -922,7 +922,7 @@ export function registerGameEvents(socket: Socket, io: Server) {
       }
 
       // Use the new GameService method to resolve evocation
-      const result = gameService.resolveEvocation(context.roomId, context.player.id, data.userInput);
+      const result = gameService.resolveEvocation(context.roomId, context.player.id, data.params);
       
       if (result.success) {
         socket.emit('resolve-evocation-response', {
