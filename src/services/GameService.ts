@@ -92,6 +92,16 @@ export class GameService {
         ? createPlayerIntercessions(roomPlayer.selectedIntercessions as IntercessionsType[])
         : [];
 
+      // Determine default tile color based on player position
+      let defaultTileColor: string;
+      if (roomPlayer.isAI) {
+        defaultTileColor = 'demonic';
+      } else {
+        // Player 1 gets angelic, Player 2 gets demonic
+        const playerIndex = roomPlayers.findIndex(p => p.id === roomPlayer.id);
+        defaultTileColor = playerIndex === 0 ? 'angelic' : 'demonic';
+      }
+
       return {
         id: roomPlayer.id,
         name: roomPlayer.name,
@@ -103,7 +113,7 @@ export class GameService {
         activePowerUpForTurn: null,
         evocations: [], // Start with no evocations
         intercessions, // Populated from selectedIntercessions
-        tileColor: roomPlayer.isAI ? 'demonic' : (roomPlayer.color || 'angelic'),
+        tileColor: roomPlayer.color || defaultTileColor,
         isAI: roomPlayer.isAI || false,
         aiPersonality: roomPlayer.aiPersonality,
         silencedTiles: [],
