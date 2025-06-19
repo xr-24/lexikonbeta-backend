@@ -351,6 +351,7 @@ export class GameService {
         score: currentPlayer.score + damageDealt, // Keep traditional score for history
         activePowerUpForTurn: null, // Clear active power-up after move
         samaelDoubleDamage: false, // Clear Samael effect after use
+        stolenMultiplier: undefined, // Clear Valefor's stolen multiplier after use
       };
 
       // Add collected evocations to player's inventory (or heal AI)
