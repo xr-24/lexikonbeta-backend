@@ -730,6 +730,30 @@ export class EvocationManager {
           error: haagenResult.error
         };
 
+      case 'ASTAROTH':
+        // ASTAROTH is handled in activateEvocation (adds blank tile immediately)
+        // No additional execution needed
+        return {
+          success: true,
+          updatedCurrentPlayer: currentPlayer
+        };
+
+      case 'OROBAS':
+        // OROBAS is handled via game modifiers during move validation
+        // No additional execution needed
+        return {
+          success: true,
+          updatedCurrentPlayer: currentPlayer
+        };
+
+      case 'FURFUR':
+        // FURFUR is handled in activateEvocation (sets hasExtraTurn flag)
+        // No additional execution needed
+        return {
+          success: true,
+          updatedCurrentPlayer: currentPlayer
+        };
+
       case 'VALEFOR':
         // TODO: Implement multiplier stealing logic
         return {
