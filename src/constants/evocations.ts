@@ -47,7 +47,7 @@ export const EVOCATION_DEFINITIONS: Record<EvocationType, Evocation> = {
     id: 'evocation-valefor',
     type: 'VALEFOR',
     name: 'Invocation of Valefor',
-    description: 'Steal a double or triple word multiplier from the board for your own use.',
+    description: 'The next word you spell deals 4x damage.',
     color: '#9932CC' // Dark orchid pentagram
   },
   DANTALION: {

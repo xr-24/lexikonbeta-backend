@@ -111,15 +111,6 @@ export class MoveManager {
       };
     }
 
-    // Apply stolen multiplier from Valefor, if present
-    if (score && player.stolenMultiplier) {
-      const multiplier = player.stolenMultiplier.type === 'TRIPLE_WORD' ? 3 : 2;
-      score = {
-        ...score,
-        totalScore: score.totalScore * multiplier
-      };
-    }
-
     return {
       isValid: true,
       validation,

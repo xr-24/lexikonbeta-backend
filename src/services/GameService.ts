@@ -351,7 +351,6 @@ export class GameService {
         score: currentPlayer.score + damageDealt, // Keep traditional score for history
         activePowerUpForTurn: null, // Clear active power-up after move
         samaelDoubleDamage: false, // Clear Samael effect after use
-        stolenMultiplier: undefined, // Clear Valefor's stolen multiplier after use
       };
 
       // Add collected evocations to player's inventory (or heal AI)
@@ -1996,8 +1995,18 @@ export class GameService {
     const result = EvocationManager.activateEvocation(player, evocationId);
     
     if (result.success) {
+      const updatedPlayer = {
+        ...result.updatedPlayer,
+        activePowerUpForTurn: {
+          id: result.activatedEvocation!.id,
+          type: result.activatedEvocation!.type as any,
+          name: result.activatedEvocation!.name,
+          description: result.activatedEvocation!.description,
+          emoji: '',
+        }
+      }
       // Update the player in game state
-      this.updatePlayerInGame(gameId, playerId, result.updatedPlayer);
+      this.updatePlayerInGame(gameId, playerId, updatedPlayer);
       
       // If evocation doesn't require user input, execute it immediately
       if (!result.requiresUserInput && result.activatedEvocation) {

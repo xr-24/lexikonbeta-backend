@@ -62,7 +62,10 @@ export class EvocationManager {
       case 'FURFUR':
         modifiers.skipTurnAdvancement = true;
         break;
-      // AIM, VALEFOR, DANTALION, FORNEUS, MURMUR require special handling
+      case 'VALEFOR':
+        modifiers.scoreMultiplier = 4;
+        break;
+      // AIM, DANTALION, FORNEUS, MURMUR require special handling
       // and don't modify the basic game modifiers
     }
 
@@ -183,21 +186,6 @@ export class EvocationManager {
           inputType: 'OPPONENT_TILE'
         };
 
-      case 'VALEFOR':
-        // Requires player to select which board multiplier to steal
-        updatedPlayer.pendingEvocation = {
-          evocationType: evocation.type,
-          evocationId: evocation.id,
-          requiresInput: 'BOARD_POSITION'
-        };
-        return {
-          success: true,
-          updatedPlayer,
-          activatedEvocation: evocation,
-          requiresUserInput: true,
-          inputType: 'BOARD_POSITION'
-        };
-
       // Evocations that can be executed immediately
       case 'ASTAROTH':
         // Add blank tile to rack
@@ -272,7 +260,7 @@ export class EvocationManager {
       case 'ANDROMALIUS':
         return 'Steal one tile from your opponent\'s rack to use on your turn.';
       case 'VALEFOR':
-        return 'Steal a double or triple word multiplier from the board for your own use.';
+        return 'The next word you spell deals 4x damage.';
       case 'DANTALION':
         return 'Duplicate one tile in your rack.';
       case 'FURFUR':
@@ -594,57 +582,6 @@ export class EvocationManager {
     };
   }
 
-  static executeValefor(board: any[][], targetPosition: {row: number, col: number}): {
-    success: boolean;
-    updatedBoard: any[][];
-    stolenMultiplier?: {type: 'DOUBLE_WORD' | 'TRIPLE_WORD', position: {row: number, col: number}};
-    error?: string;
-  } {
-    // Validate target position exists and has a multiplier
-    const targetCell = board[targetPosition.row]?.[targetPosition.col];
-    if (!targetCell) {
-      return {
-        success: false,
-        updatedBoard: board,
-        error: 'Invalid board position'
-      };
-    }
-
-    // Check if the cell has a multiplier and no tile
-    if (!targetCell.multiplier || targetCell.tile) {
-      return {
-        success: false,
-        updatedBoard: board,
-        error: 'No available multiplier at target position'
-      };
-    }
-
-    // Steal the multiplier
-    const stolenMultiplier = {
-      type: targetCell.multiplier as 'DOUBLE_WORD' | 'TRIPLE_WORD',
-      position: targetPosition
-    };
-
-    // Remove multiplier from board
-    const updatedBoard = board.map((row, rowIndex) =>
-      row.map((cell, colIndex) => {
-        if (rowIndex === targetPosition.row && colIndex === targetPosition.col) {
-          return {
-            ...cell,
-            multiplier: null // Remove the multiplier
-          };
-        }
-        return cell;
-      })
-    );
-
-    return {
-      success: true,
-      updatedBoard,
-      stolenMultiplier
-    };
-  }
-
   // New unified method to execute evocations with all necessary game state
   static executeEvocation(
     evocationType: EvocationType,
@@ -821,22 +758,11 @@ export class EvocationManager {
         };
 
       case 'VALEFOR':
-        if (!userInput?.targetPosition) {
-          return {
-            success: false,
-            updatedCurrentPlayer: currentPlayer,
-            error: 'No target position specified for Valefor'
-          };
-        }
-        const valeforResult = this.executeValefor(board, userInput.targetPosition);
+        // VALEFOR is handled via game modifiers during move validation
+        // No additional execution needed
         return {
-          success: valeforResult.success,
-          updatedCurrentPlayer: valeforResult.success ? {
-            ...currentPlayer,
-            stolenMultiplier: valeforResult.stolenMultiplier
-          } : currentPlayer,
-          updatedBoard: valeforResult.updatedBoard,
-          error: valeforResult.error
+          success: true,
+          updatedCurrentPlayer: currentPlayer
         };
 
       default:
