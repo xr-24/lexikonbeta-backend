@@ -2,6 +2,7 @@ import type { BoardCell, PlacedTile, Tile, Player, PowerUp } from '../types/game
 import { validateMove, type ValidationResult } from './wordValidator';
 import { calculateTurnScore, type TurnScore } from './scoreCalculator';
 import { PowerUpManager } from './PowerUpManager';
+import { EvocationManager } from './EvocationManager';
 
 export interface MoveResult {
   isValid: boolean;
@@ -76,7 +77,22 @@ export class MoveManager {
     }
 
     // Get power-up modifiers
-    const modifiers = PowerUpManager.applyPowerUpEffects(player.activePowerUpForTurn?.type || null);
+    let modifiers = PowerUpManager.applyPowerUpEffects(player.activePowerUpForTurn?.type || null);
+    
+    // Check for evocation modifiers (like Valefor 4x damage)
+    if (player.activePowerUpForTurn && 'color' in player.activePowerUpForTurn) {
+      const evocationType = (player.activePowerUpForTurn as any).type;
+      if (evocationType) {
+        const evocationModifiers = EvocationManager.applyEvocationEffects(evocationType);
+        // Merge evocation modifiers with power-up modifiers
+        modifiers = {
+          ...modifiers,
+          ...evocationModifiers,
+          // Ensure score multiplier takes the highest value
+          scoreMultiplier: Math.max(modifiers.scoreMultiplier, evocationModifiers.scoreMultiplier)
+        };
+      }
+    }
 
     // Validate tile usage with power-up considerations
     const tileValidation = PowerUpManager.validateTileUsage(player, pendingTiles, modifiers.allowUnlimitedTiles);

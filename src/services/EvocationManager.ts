@@ -549,6 +549,7 @@ export class EvocationManager {
   static executeForneus(board: any[][], targetPositions: Array<{row: number, col: number}>): {
     success: boolean;
     updatedBoard: any[][];
+    frozenTiles: Array<{row: number, col: number, frozenByPlayerId: string, turnsRemaining: number}>;
     error?: string;
   } {
     // Validate all target positions have tiles
@@ -557,6 +558,7 @@ export class EvocationManager {
         return {
           success: false,
           updatedBoard: board,
+          frozenTiles: [],
           error: `No tile found at position (${pos.row}, ${pos.col})`
         };
       }
@@ -576,9 +578,18 @@ export class EvocationManager {
       })
     );
 
+    // Create frozen tiles tracking data (frozen for 1 turn)
+    const frozenTiles = targetPositions.map(pos => ({
+      row: pos.row,
+      col: pos.col,
+      frozenByPlayerId: '', // Will be set by caller
+      turnsRemaining: 1
+    }));
+
     return {
       success: true,
-      updatedBoard
+      updatedBoard,
+      frozenTiles
     };
   }
 

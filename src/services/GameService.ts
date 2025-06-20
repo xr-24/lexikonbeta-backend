@@ -310,7 +310,13 @@ export class GameService {
       return { success: false, errors: ['Invalid tile ownership'] };
     }
 
-    const moveResult = await moveManager.executeMove(gameState.board, currentPlayer, pendingTiles, gameState);
+    // Create enhanced game state with frozen tiles for validation
+    const enhancedGameState = {
+      ...gameState,
+      frozenTiles: gameState.frozenTiles || []
+    };
+
+    const moveResult = await moveManager.executeMove(gameState.board, currentPlayer, pendingTiles, enhancedGameState);
 
     if (moveResult.isValid && moveResult.score) {
       // Stamp tiles with player ID before committing to board
@@ -333,13 +339,10 @@ export class GameService {
       let baseDamage = moveResult.score?.totalScore ?? 0;
       
       // Apply evocation score multiplier if active (e.g., Valefor)
-      const activeEffect = currentPlayer.activePowerUpForTurn;
-      if (activeEffect && 'color' in activeEffect && (activeEffect as any).type === 'VALEFOR') {
-        const modifiers = EvocationManager.applyEvocationEffects('VALEFOR');
-        if (modifiers.scoreMultiplier > 1) {
-          baseDamage *= modifiers.scoreMultiplier;
-          console.log(`Valefor evocation active: damage multiplied by ${modifiers.scoreMultiplier} -> ${baseDamage}`);
-        }
+      // Check if the move result already has the multiplier applied from EvocationManager
+      if (moveResult.modifiers?.scoreMultiplier && moveResult.modifiers.scoreMultiplier > 1) {
+        // The multiplier was already applied in moveManager.executeMove, so baseDamage is already correct
+        console.log(`Evocation score multiplier already applied: ${moveResult.modifiers.scoreMultiplier}x -> ${baseDamage}`);
       }
 
       // Check for Samael double damage effect
