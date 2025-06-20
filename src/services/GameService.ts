@@ -332,6 +332,16 @@ export class GameService {
       const opponent = gameState.players.find(p => p.id !== currentPlayer.id);
       let baseDamage = moveResult.score?.totalScore ?? 0;
       
+      // Apply evocation score multiplier if active (e.g., Valefor)
+      const activeEffect = currentPlayer.activePowerUpForTurn;
+      if (activeEffect && 'color' in activeEffect && (activeEffect as any).type === 'VALEFOR') {
+        const modifiers = EvocationManager.applyEvocationEffects('VALEFOR');
+        if (modifiers.scoreMultiplier > 1) {
+          baseDamage *= modifiers.scoreMultiplier;
+          console.log(`Valefor evocation active: damage multiplied by ${modifiers.scoreMultiplier} -> ${baseDamage}`);
+        }
+      }
+
       // Check for Samael double damage effect
       let damageDealt = baseDamage;
       if (currentPlayer.samaelDoubleDamage) {
@@ -503,6 +513,16 @@ export class GameService {
       const opponent = gameState.players.find(p => p.id !== currentPlayer.id);
       let baseDamage = moveResult.score?.totalScore ?? 0;
       
+      // Apply evocation score multiplier if active (e.g., Valefor)
+      const activeEffect = currentPlayer.activePowerUpForTurn;
+      if (activeEffect && 'color' in activeEffect && (activeEffect as any).type === 'VALEFOR') {
+        const modifiers = EvocationManager.applyEvocationEffects('VALEFOR');
+        if (modifiers.scoreMultiplier > 1) {
+          baseDamage *= modifiers.scoreMultiplier;
+          console.log(`Valefor evocation active: damage multiplied by ${modifiers.scoreMultiplier} -> ${baseDamage}`);
+        }
+      }
+      
       // Check for Samael double damage effect
       let damageDealt = baseDamage;
       if (currentPlayer.samaelDoubleDamage) {
@@ -528,8 +548,8 @@ export class GameService {
       if (moveResult.collectedPowerUps && moveResult.collectedPowerUps.length > 0) {
         moveResult.collectedPowerUps.forEach(powerUp => {
           if (updatedPlayer.isAI) {
-            // AI gets 20 HP healing per evocation
-            updatedPlayer.hp = Math.min(200, updatedPlayer.hp + 20);
+            // AI gets 20 HP healing per evocation (max 250 HP)
+            updatedPlayer.hp = Math.min(250, updatedPlayer.hp + 20);
           } else {
             // Human gets evocation ability (convert PowerUp to Evocation)
             // For now, keep existing powerup logic - will be updated in Phase 3
