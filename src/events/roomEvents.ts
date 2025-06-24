@@ -14,15 +14,16 @@ export function registerRoomEvents(socket: Socket, io: Server) {
       const session = await roomManager.checkSessionByIP(clientIP);
       
       if (session) {
+        console.log('🔍 Session data retrieved:', session);
         socket.emit('session-found', {
           success: true,
           session: {
-            roomCode: session.roomCode,
-            playerName: session.playerName,
-            playerId: session.playerId
+            roomCode: session.room_code || session.roomCode,
+            playerName: session.player_name || session.playerName,
+            playerId: session.player_id || session.playerId
           }
         });
-        console.log(`Session found for IP ${clientIP}: ${session.playerName} in room ${session.roomCode}`);
+        console.log(`Session found for IP ${clientIP}: ${session.player_name || session.playerName} in room ${session.room_code || session.roomCode}`);
       } else {
         socket.emit('session-found', {
           success: false,

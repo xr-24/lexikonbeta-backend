@@ -67,6 +67,7 @@ export class NewRoomManager {
       // Create session if IP is provided
       if (ip) {
         await this.db.createPlayerSession(hostPlayer.id, room.id, ip);
+        console.log(`📱 Session created for host IP ${ip}: ${request.playerName} in room ${roomCode}`);
       }
 
       console.log(`Room created: ${roomCode} by ${request.playerName}`);
@@ -155,6 +156,7 @@ export class NewRoomManager {
       // Create session if IP is provided
       if (ip) {
         await this.db.createPlayerSession(newPlayer.id, room.id, ip);
+        console.log(`📱 Session created for player IP ${ip}: ${request.playerName} in room ${request.roomCode}`);
       }
 
       console.log(`Player ${request.playerName} joined room ${request.roomCode}`);
@@ -351,9 +353,13 @@ export class NewRoomManager {
   }
 
   async clearSession(ip: string): Promise<void> {
-    // This would need to be implemented in DatabaseService
-    // For now, we'll just log it
-    console.log(`Clearing session for IP: ${ip}`);
+    try {
+      // Clear session from database
+      await this.db.clearPlayerSessionByIP(ip);
+      console.log(`📱 Session cleared for IP: ${ip}`);
+    } catch (error) {
+      console.error('Error clearing session:', error);
+    }
   }
 
   private async cleanupDisconnectedPlayer(playerId: string): Promise<void> {

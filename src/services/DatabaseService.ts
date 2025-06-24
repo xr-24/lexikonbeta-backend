@@ -338,6 +338,13 @@ export class DatabaseService {
     return result.rows.length > 0 ? result.rows[0] : null;
   }
 
+  async clearPlayerSessionByIP(ipAddress: string): Promise<void> {
+    await this.pg.query(
+      'DELETE FROM player_sessions WHERE ip_address = $1',
+      [ipAddress]
+    );
+  }
+
   // Utility Methods
   private mapDbRoomToRoom(dbRow: any): Room {
     // Process players to properly parse selectedIntercessions from JSON
