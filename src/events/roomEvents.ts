@@ -188,6 +188,12 @@ export function registerRoomEvents(socket: Socket, io: Server) {
       
       if (result.success && result.room) {
         console.log('✅ Room join successful, joining socket to room:', result.room.id);
+        console.log('🔄 Room join result details:', { 
+          roomCode: result.room.code, 
+          playerCount: result.room.players.length,
+          isStarted: result.room.isStarted,
+          intercessionSelectionStarted: result.room.intercessionSelectionStarted
+        });
         
         // Join the socket to the room
         socket.join(result.room.id);

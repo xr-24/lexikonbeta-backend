@@ -102,10 +102,12 @@ export class NewRoomManager {
       console.log('🔍 Room found:', { id: room.id, code: room.code, playerCount: room.players.length });
 
       // Check if this is a reconnection attempt
+      console.log('🔄 Checking for disconnected players:', Array.from(this.disconnectedPlayers.keys()));
       const disconnectedPlayer = Array.from(this.disconnectedPlayers.values())
         .find(dp => dp.roomId === room.id && dp.player.name === request.playerName);
 
       if (disconnectedPlayer) {
+        console.log('🔄 Found disconnected player, reconnecting:', disconnectedPlayer.player.name);
         // Reconnect existing player
         const player = disconnectedPlayer.player;
         
@@ -118,7 +120,29 @@ export class NewRoomManager {
         // Update socket mapping
         this.socketToPlayer.set(playerSocketId, { playerId: player.id, roomId: room.id });
         
-        console.log(`Player ${request.playerName} reconnected to room ${request.roomCode}`);
+        console.log(`✅ Player ${request.playerName} reconnected to room ${request.roomCode}`);
+        
+        const updatedRoom = await this.db.getRoomById(room.id);
+        return {
+          success: true,
+          room: this.getRoomInfoFromRoom(updatedRoom!)
+        };
+      }
+
+      console.log('🔄 No disconnected player found, checking if player exists in room...');
+      
+      // Check if player already exists in the room (might be a session-based reconnection)
+      const existingPlayer = room.players.find(p => p.name === request.playerName);
+      if (existingPlayer) {
+        console.log('🔄 Found existing player in room, updating socket ID:', existingPlayer.name);
+        
+        // Update the existing player's socket ID
+        await this.db.updatePlayerConnection(existingPlayer.id, playerSocketId, true);
+        
+        // Update socket mapping
+        this.socketToPlayer.set(playerSocketId, { playerId: existingPlayer.id, roomId: room.id });
+        
+        console.log(`✅ Player ${request.playerName} reconnected to existing room ${request.roomCode}`);
         
         const updatedRoom = await this.db.getRoomById(room.id);
         return {
