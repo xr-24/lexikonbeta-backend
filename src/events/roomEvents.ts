@@ -207,11 +207,29 @@ export function registerRoomEvents(socket: Socket, io: Server) {
           
           if (gameState) {
             console.log('🎮 Found active game state, sending game-started event (not room-joined)');
+            
+            // Find the current player in the room to send their ID
+            const playerInRoom = await roomManager.getPlayerInRoom(socket.id);
+            const reconnectingPlayer = playerInRoom?.player;
+            
+            console.log('🎮 Reconnecting player info:', {
+              playerId: reconnectingPlayer?.id,
+              playerName: reconnectingPlayer?.name,
+              isHost: reconnectingPlayer?.isHost
+            });
+            
             // Send game state to reconnecting player - don't send room-joined for active games
             socket.emit('game-started', {
               success: true,
               gameState: gameState,
-              pendingTiles: pendingTiles
+              pendingTiles: pendingTiles,
+              // Include player identification for proper reconnection
+              reconnectionData: {
+                playerId: reconnectingPlayer?.id,
+                playerName: reconnectingPlayer?.name,
+                isHost: reconnectingPlayer?.isHost,
+                roomCode: result.room.code
+              }
             });
           } else {
             console.log('⚠️ Room is marked as started but no game state found in GameService');
