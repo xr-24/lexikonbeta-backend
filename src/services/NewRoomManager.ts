@@ -476,13 +476,17 @@ export class NewRoomManager {
         return { success: false, error: 'Cannot add AI player after game has started' };
       }
 
+      // Generate a demon name for the AI player
+      const demonName = aiService.generateDemonName();
+      console.log(`⛧ Generated demon name for AI player: ${demonName}`);
+      
       const aiPlayer: RoomPlayer = {
         id: `ai-${Date.now()}-${playerInRoom.room.players.length}`,
-        name: `AI Player ${playerInRoom.room.players.length}`,
+        name: demonName,
         socketId: undefined,
         isHost: false,
         isAI: true,
-        aiPersonality: 'balanced',
+        aiPersonality: demonName, // Use demon name as personality
         joinedAt: new Date(),
       };
 
