@@ -269,18 +269,43 @@ export class NewRoomManager {
         return { success: false, error: 'Only the host can start the game' };
       }
 
-      if (room.players.length < 2) {
-        return { success: false, error: 'Need at least 2 players to start' };
+      if (room.isStarted) {
+        return { success: false, error: 'Game has already started' };
       }
 
-      // Initialize game state using GameService
-      const gameState = gameService.initializeGame(room.id, room.players);
+      // Check if game can start (intercessions validation)
+      const canStartResult = await this.canStartGame(playerInfo.roomId);
+      if (!canStartResult.canStart) {
+        if (canStartResult.reason === 'Not all players have selected intercessions') {
+          // Set intercession selection started flag
+          await this.db.updateRoom(playerInfo.roomId, {
+            intercessionSelectionStarted: true
+          });
+          return { success: false, waitingForIntercessions: true };
+        }
+        return { success: false, error: canStartResult.reason };
+      }
+
+      // Start the game
+      const roomPlayers = room.players.map(p => ({ 
+        id: p.id, 
+        name: p.name, 
+        color: p.color,
+        isAI: p.isAI,
+        aiPersonality: p.aiPersonality,
+        selectedIntercessions: p.selectedIntercessions || []
+      }));
+      
+      const gameState = gameService.initializeGame(playerInfo.roomId, roomPlayers);
       
       // Update room with game state
-      await this.db.updateRoom(room.id, {
+      await this.db.updateRoom(playerInfo.roomId, {
         isStarted: true,
+        intercessionSelectionStarted: false,
         gameState: gameState
       });
+
+      console.log(`Game started in room ${room.code} with ${room.players.length} players`);
 
       return {
         success: true,
