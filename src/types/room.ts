@@ -15,7 +15,7 @@ export interface Room {
 export interface RoomPlayer {
   id: string;
   name: string;
-  socketId: string;
+  socketId?: string;
   isHost: boolean;
   joinedAt: Date;
   color?: string;

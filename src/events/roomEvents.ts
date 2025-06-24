@@ -1,17 +1,17 @@
 import { Socket, Server } from 'socket.io';
-import { roomManager } from '../services/RoomManager';
+import { roomManager } from '../services/roomManagerInstance';
 import { gameService } from '../services/GameService';
 import { ValidationUtils, RateLimiter } from '../services/validation';
 import type { CreateRoomRequest, JoinRoomRequest, SelectIntercessionsRequest } from '../types/room';
 
 export function registerRoomEvents(socket: Socket, io: Server) {
   // Check for existing session
-  socket.on('check-session', () => {
+  socket.on('check-session', async () => {
     try {
       const clientIP = socket.handshake.address;
       console.log('Session check request from IP:', clientIP);
       
-      const session = roomManager.checkSessionByIP(clientIP);
+      const session = await roomManager.checkSessionByIP(clientIP);
       
       if (session) {
         socket.emit('session-found', {
@@ -39,10 +39,10 @@ export function registerRoomEvents(socket: Socket, io: Server) {
   });
 
   // Clear session (when player chooses to leave permanently)
-  socket.on('clear-session', () => {
+  socket.on('clear-session', async () => {
     try {
       const clientIP = socket.handshake.address;
-      roomManager.clearSession(clientIP);
+      await roomManager.clearSession(clientIP);
       
       socket.emit('session-cleared', {
         success: true
@@ -59,7 +59,7 @@ export function registerRoomEvents(socket: Socket, io: Server) {
   });
 
   // Create a new room
-  socket.on('create-room', (data: CreateRoomRequest) => {
+  socket.on('create-room', async (data: CreateRoomRequest) => {
     try {
       // Rate limiting
       if (!RateLimiter.checkLimit(socket.id, 'create-room', 1, 10000)) { // 1 per 10 seconds
@@ -96,7 +96,7 @@ export function registerRoomEvents(socket: Socket, io: Server) {
       };
       
       const clientIP = socket.handshake.address;
-      const result = roomManager.createRoom(socket.id, sanitizedData, clientIP);
+      const result = await roomManager.createRoom(socket.id, sanitizedData, clientIP);
       
       if (result.success && result.room) {
         // Join the socket to the room
@@ -128,7 +128,7 @@ export function registerRoomEvents(socket: Socket, io: Server) {
   });
 
   // Join an existing room
-  socket.on('join-room', (data: JoinRoomRequest) => {
+  socket.on('join-room', async (data: JoinRoomRequest) => {
     try {
       console.log('🔍 Join room request received:', { socketId: socket.id, data });
       
@@ -182,7 +182,7 @@ export function registerRoomEvents(socket: Socket, io: Server) {
       
       console.log('🔍 Attempting to join room with sanitized data:', sanitizedData);
       const clientIP = socket.handshake.address;
-      const result = roomManager.joinRoom(socket.id, sanitizedData, clientIP);
+      const result = await roomManager.joinRoom(socket.id, sanitizedData, clientIP);
       console.log('🔍 Room join result:', { success: result.success, error: result.error });
       
       if (result.success && result.room) {
@@ -224,11 +224,11 @@ export function registerRoomEvents(socket: Socket, io: Server) {
   });
 
   // Leave room
-  socket.on('leave-room', () => {
+  socket.on('leave-room', async () => {
     try {
       console.log('Leave room request from:', socket.id);
       
-      const result = roomManager.leaveRoom(socket.id);
+      const result = await roomManager.leaveRoom(socket.id);
       
       if (result.success && result.roomId) {
         // Leave the socket room
@@ -240,7 +240,7 @@ export function registerRoomEvents(socket: Socket, io: Server) {
         });
         
         // Get updated room info and broadcast to remaining players
-        const roomInfo = roomManager.getRoomInfo(result.roomId);
+        const roomInfo = await roomManager.getRoomInfo(result.roomId);
         if (roomInfo) {
           io.to(result.roomId).emit('room-updated', roomInfo);
           
@@ -268,7 +268,7 @@ export function registerRoomEvents(socket: Socket, io: Server) {
   });
 
   // Start game (host only)
-  socket.on('start-game', () => {
+  socket.on('start-game', async () => {
     try {
       // Rate limiting
       if (!RateLimiter.checkLimit(socket.id, 'start-game', 1, 5000)) { // 1 per 5 seconds
@@ -281,10 +281,10 @@ export function registerRoomEvents(socket: Socket, io: Server) {
 
       console.log('Start game request from:', socket.id);
       
-      const result = roomManager.startGame(socket.id);
+      const result = await roomManager.startGame(socket.id);
 
       if (result.success && result.gameState) {
-        const playerInRoom = roomManager.getPlayerInRoom(socket.id);
+        const playerInRoom = await roomManager.getPlayerInRoom(socket.id);
 
         if (playerInRoom) {
           // Broadcast game start to all players in the room
@@ -300,7 +300,7 @@ export function registerRoomEvents(socket: Socket, io: Server) {
           console.log(`Game started in room ${playerInRoom.room.code}`);
         }
       } else if (result.waitingForIntercessions) {
-        const playerInRoom = roomManager.getPlayerInRoom(socket.id);
+        const playerInRoom = await roomManager.getPlayerInRoom(socket.id);
         if (playerInRoom) {
           io.to(playerInRoom.room.id).emit('intercession-selection-start');
         }
@@ -324,12 +324,12 @@ export function registerRoomEvents(socket: Socket, io: Server) {
   });
 
   // Get current room info
-  socket.on('get-room-info', () => {
+  socket.on('get-room-info', async () => {
     try {
-      const playerInRoom = roomManager.getPlayerInRoom(socket.id);
+      const playerInRoom = await roomManager.getPlayerInRoom(socket.id);
       
       if (playerInRoom) {
-        const roomInfo = roomManager.getRoomInfo(playerInRoom.room.id);
+        const roomInfo = await roomManager.getRoomInfo(playerInRoom.room.id);
         socket.emit('room-info', {
           success: true,
           room: roomInfo
@@ -350,7 +350,7 @@ export function registerRoomEvents(socket: Socket, io: Server) {
   });
 
   // Update player color
-  socket.on('update-player-color', (data: { color: string }) => {
+  socket.on('update-player-color', async (data: { color: string }) => {
     try {
       // Rate limiting
       if (!RateLimiter.checkLimit(socket.id, 'update-color', 3, 5000)) { // 3 per 5 seconds
@@ -376,12 +376,12 @@ export function registerRoomEvents(socket: Socket, io: Server) {
                          ? data.color 
                          : '#DC143C';
       
-      const result = roomManager.updatePlayerColor(socket.id, playerColor);
+      const result = await roomManager.updatePlayerColor(socket.id, playerColor);
       
       if (result.success && result.room) {
         // If game is started, also update the game state
         if (result.room.isStarted) {
-          const playerInRoom = roomManager.getPlayerInRoom(socket.id);
+          const playerInRoom = await roomManager.getPlayerInRoom(socket.id);
           if (playerInRoom) {
             const gameResult = gameService.updatePlayerColor(
               result.room.id, 
@@ -417,7 +417,7 @@ export function registerRoomEvents(socket: Socket, io: Server) {
   });
 
   // Add AI player (host only)
-  socket.on('add-ai-player', () => {
+  socket.on('add-ai-player', async () => {
     try {
       // Rate limiting
       if (!RateLimiter.checkLimit(socket.id, 'add-ai', 2, 5000)) { // 2 per 5 seconds
@@ -430,7 +430,7 @@ export function registerRoomEvents(socket: Socket, io: Server) {
 
       console.log('Add AI player request from:', socket.id);
       
-      const result = roomManager.addAIPlayer(socket.id);
+      const result = await roomManager.addAIPlayer(socket.id);
       
       if (result.success && result.room) {
         // Broadcast room update to all players in the room
@@ -459,7 +459,7 @@ export function registerRoomEvents(socket: Socket, io: Server) {
   });
 
   // Remove AI player (host only)
-  socket.on('remove-ai-player', (data: { aiPlayerId: string }) => {
+  socket.on('remove-ai-player', async (data: { aiPlayerId: string }) => {
     try {
       // Rate limiting
       if (!RateLimiter.checkLimit(socket.id, 'remove-ai', 3, 5000)) { // 3 per 5 seconds
@@ -481,7 +481,7 @@ export function registerRoomEvents(socket: Socket, io: Server) {
         return;
       }
       
-      const result = roomManager.removeAIPlayer(socket.id, data.aiPlayerId);
+      const result = await roomManager.removeAIPlayer(socket.id, data.aiPlayerId);
       
       if (result.success && result.room) {
         // Broadcast room update to all players in the room
@@ -510,7 +510,7 @@ export function registerRoomEvents(socket: Socket, io: Server) {
   });
 
   // Select intercessions
-  socket.on('select-intercessions', (data: SelectIntercessionsRequest) => {
+  socket.on('select-intercessions', async (data: SelectIntercessionsRequest) => {
     try {
       // Rate limiting
       if (!RateLimiter.checkLimit(socket.id, 'select-intercessions', 2, 5000)) { // 2 per 5 seconds
@@ -549,7 +549,7 @@ export function registerRoomEvents(socket: Socket, io: Server) {
         return;
       }
       
-      const result = roomManager.selectIntercessions(socket.id, data);
+      const result = await roomManager.selectIntercessions(socket.id, data);
 
       if (result.success && result.room) {
         // Send success response to the player
@@ -570,7 +570,7 @@ export function registerRoomEvents(socket: Socket, io: Server) {
           gameService.checkAndExecuteAITurn(result.room.id, io);
         } else {
           // Check if all players have selected intercessions and notify
-          const canStartResult = roomManager.canStartGame(result.room.id);
+          const canStartResult = await roomManager.canStartGame(result.room.id);
           if (canStartResult.canStart) {
             io.to(result.room.id).emit('ready-to-start', {
               message: 'All players have selected intercessions. Ready to start!'
@@ -595,7 +595,7 @@ export function registerRoomEvents(socket: Socket, io: Server) {
   });
 
   // Send chat message
-  socket.on('send-chat-message', (data: { message: string; playerColor?: string }) => {
+  socket.on('send-chat-message', async (data: { message: string; playerColor?: string }) => {
     try {
       // Rate limiting for chat
       if (!RateLimiter.checkLimit(socket.id, 'chat', 5, 5000)) { // 5 messages per 5 seconds
@@ -623,7 +623,7 @@ export function registerRoomEvents(socket: Socket, io: Server) {
         return;
       }
       
-      const playerInRoom = roomManager.getPlayerInRoom(socket.id);
+      const playerInRoom = await roomManager.getPlayerInRoom(socket.id);
       
       if (playerInRoom) {
         // Use stored player color or provided color as fallback
@@ -635,7 +635,7 @@ export function registerRoomEvents(socket: Socket, io: Server) {
 
         // Update player color if provided and different from stored
         if (data.playerColor && data.playerColor !== playerInRoom.player.color) {
-          roomManager.updatePlayerColor(socket.id, data.playerColor);
+          await roomManager.updatePlayerColor(socket.id, data.playerColor);
         }
         
         const chatMessage = {
@@ -665,15 +665,15 @@ export function registerRoomEvents(socket: Socket, io: Server) {
   });
 
   // Handle disconnect
-  socket.on('disconnect', () => {
+  socket.on('disconnect', async () => {
     try {
       console.log('Player disconnected:', socket.id);
       
-      const result = roomManager.handlePlayerDisconnect(socket.id);
+      const result = await roomManager.handlePlayerDisconnect(socket.id);
       
       if (result.roomId) {
         // Get updated room info and broadcast to remaining players
-        const roomInfo = roomManager.getRoomInfo(result.roomId);
+        const roomInfo = await roomManager.getRoomInfo(result.roomId);
         if (roomInfo) {
           io.to(result.roomId).emit('room-updated', roomInfo);
           

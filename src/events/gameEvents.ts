@@ -1,13 +1,13 @@
 import { Socket, Server } from 'socket.io';
-import { roomManager } from '../services/RoomManager';
+import { roomManager } from '../services/roomManagerInstance';
 import { gameService } from '../services/GameService';
 import { ValidationUtils, RateLimiter } from '../services/validation';
 import type { Tile } from '../types/game';
 
 export function registerGameEvents(socket: Socket, io: Server) {
   // Helper function to get player's room and validate game state
-  function getPlayerGameContext(socketId: string) {
-    const playerInRoom = roomManager.getPlayerInRoom(socketId);
+  async function getPlayerGameContext(socketId: string) {
+    const playerInRoom = await roomManager.getPlayerInRoom(socketId);
     if (!playerInRoom || !playerInRoom.room.isStarted) {
       return null;
     }
@@ -90,7 +90,7 @@ export function registerGameEvents(socket: Socket, io: Server) {
   }
 
   // Place a tile on the board
-  socket.on('place-tile', (data: { tile: Tile; row: number; col: number }) => {
+  socket.on('place-tile', async (data: { tile: Tile; row: number; col: number }) => {
     try {
       // Rate limiting
       if (!RateLimiter.checkLimit(socket.id, 'place-tile', 10, 1000)) { // 10 per second
@@ -103,7 +103,7 @@ export function registerGameEvents(socket: Socket, io: Server) {
 
       console.log('Place tile request:', data);
       
-      const context = getPlayerGameContext(socket.id);
+      const context = await getPlayerGameContext(socket.id);
       if (!context) {
         console.log('No game context for place-tile');
         socket.emit('place-tile-response', {
@@ -191,7 +191,7 @@ export function registerGameEvents(socket: Socket, io: Server) {
   });
 
   // Remove a tile from the board
-  socket.on('remove-tile', (data: { row: number; col: number }) => {
+  socket.on('remove-tile', async (data: { row: number; col: number }) => {
     try {
       // Rate limiting
       if (!RateLimiter.checkLimit(socket.id, 'remove-tile', 10, 1000)) { // 10 per second
@@ -204,7 +204,7 @@ export function registerGameEvents(socket: Socket, io: Server) {
 
       console.log('Remove tile request:', data);
       
-      const context = getPlayerGameContext(socket.id);
+      const context = await getPlayerGameContext(socket.id);
       if (!context) {
         socket.emit('remove-tile-response', {
           success: false,
@@ -274,7 +274,7 @@ export function registerGameEvents(socket: Socket, io: Server) {
 
       console.log('Commit move request from:', socket.id);
       
-      const context = getPlayerGameContext(socket.id);
+      const context = await getPlayerGameContext(socket.id);
       if (!context) {
         socket.emit('commit-move-response', {
           success: false,
@@ -327,7 +327,7 @@ export function registerGameEvents(socket: Socket, io: Server) {
   });
 
   // Exchange tiles
-  socket.on('exchange-tiles', (data: { tileIds: string[] }) => {
+  socket.on('exchange-tiles', async (data: { tileIds: string[] }) => {
     try {
       // Rate limiting
       if (!RateLimiter.checkLimit(socket.id, 'exchange-tiles', 1, 5000)) { // 1 per 5 seconds
@@ -340,7 +340,7 @@ export function registerGameEvents(socket: Socket, io: Server) {
 
       console.log('Exchange tiles request:', data);
       
-      const context = getPlayerGameContext(socket.id);
+      const context = await getPlayerGameContext(socket.id);
       if (!context) {
         socket.emit('exchange-tiles-response', {
           success: false,
@@ -436,7 +436,7 @@ export function registerGameEvents(socket: Socket, io: Server) {
   });
 
   // Pass turn
-  socket.on('pass-turn', () => {
+  socket.on('pass-turn', async () => {
     try {
       // Rate limiting
       if (!RateLimiter.checkLimit(socket.id, 'pass-turn', 1, 1000)) { // 1 per second
@@ -449,7 +449,7 @@ export function registerGameEvents(socket: Socket, io: Server) {
 
       console.log('Pass turn request from:', socket.id);
       
-      const context = getPlayerGameContext(socket.id);
+      const context = await getPlayerGameContext(socket.id);
       if (!context) {
         socket.emit('pass-turn-response', {
           success: false,
@@ -500,7 +500,7 @@ export function registerGameEvents(socket: Socket, io: Server) {
   });
 
   // End game
-  socket.on('end-game', () => {
+  socket.on('end-game', async () => {
     try {
       // Rate limiting
       if (!RateLimiter.checkLimit(socket.id, 'end-game', 1, 5000)) { // 1 per 5 seconds
@@ -513,7 +513,7 @@ export function registerGameEvents(socket: Socket, io: Server) {
 
       console.log('End game request from:', socket.id);
       
-      const context = getPlayerGameContext(socket.id);
+      const context = await getPlayerGameContext(socket.id);
       if (!context) {
         socket.emit('end-game-response', {
           success: false,
@@ -549,7 +549,7 @@ export function registerGameEvents(socket: Socket, io: Server) {
   });
 
   // Activate power-up
-  socket.on('activate-powerup', (data: { powerUpId: string }) => {
+  socket.on('activate-powerup', async (data: { powerUpId: string }) => {
     try {
       // Rate limiting
       if (!RateLimiter.checkLimit(socket.id, 'activate-powerup', 3, 5000)) { // 3 per 5 seconds
@@ -562,7 +562,7 @@ export function registerGameEvents(socket: Socket, io: Server) {
 
       console.log('Activate power-up request:', data);
       
-      const context = getPlayerGameContext(socket.id);
+      const context = await getPlayerGameContext(socket.id);
       if (!context) {
         socket.emit('activate-powerup-response', {
           success: false,
@@ -608,7 +608,7 @@ export function registerGameEvents(socket: Socket, io: Server) {
   });
 
   // Activate power-up tile
-  socket.on('activate-powerup-tile', (data: { tileId: string }) => {
+  socket.on('activate-powerup-tile', async (data: { tileId: string }) => {
     try {
       // Rate limiting
       if (!RateLimiter.checkLimit(socket.id, 'activate-powerup-tile', 3, 5000)) { // 3 per 5 seconds
@@ -621,7 +621,7 @@ export function registerGameEvents(socket: Socket, io: Server) {
 
       console.log('Activate power-up tile request:', data);
       
-      const context = getPlayerGameContext(socket.id);
+      const context = await getPlayerGameContext(socket.id);
       if (!context) {
         socket.emit('activate-powerup-tile-response', {
           success: false,
@@ -687,9 +687,9 @@ export function registerGameEvents(socket: Socket, io: Server) {
   });
 
   // Get current game state
-  socket.on('get-game-state', () => {
+  socket.on('get-game-state', async () => {
     try {
-      const context = getPlayerGameContext(socket.id);
+      const context = await getPlayerGameContext(socket.id);
       if (!context) {
         socket.emit('game-state-response', {
           success: false,
@@ -715,9 +715,9 @@ export function registerGameEvents(socket: Socket, io: Server) {
   });
 
   // Clear pending move
-  socket.on('clear-pending-move', () => {
+  socket.on('clear-pending-move', async () => {
     try {
-      const context = getPlayerGameContext(socket.id);
+      const context = await getPlayerGameContext(socket.id);
       if (!context) {
         socket.emit('clear-pending-move-response', {
           success: false,
@@ -767,7 +767,7 @@ export function registerGameEvents(socket: Socket, io: Server) {
 
       console.log('Activate evocation request:', data);
       
-      const context = getPlayerGameContext(socket.id);
+      const context = await getPlayerGameContext(socket.id);
       if (!context) {
         socket.emit('activate-evocation-response', {
           success: false,
@@ -892,7 +892,7 @@ export function registerGameEvents(socket: Socket, io: Server) {
 
       console.log('Resolve evocation request:', data);
       
-      const context = getPlayerGameContext(socket.id);
+      const context = await getPlayerGameContext(socket.id);
       if (!context) {
         socket.emit('resolve-evocation-response', {
           success: false,
@@ -990,7 +990,7 @@ export function registerGameEvents(socket: Socket, io: Server) {
 
       console.log('Activate intercession request:', data);
       
-      const context = getPlayerGameContext(socket.id);
+      const context = await getPlayerGameContext(socket.id);
       if (!context) {
         socket.emit('activate-intercession-response', {
           success: false,
@@ -1090,7 +1090,7 @@ export function registerGameEvents(socket: Socket, io: Server) {
   }
 
   // Execute power-up with parameters
-  socket.on('execute-powerup', (data: { powerUpType: string; params: any }) => {
+  socket.on('execute-powerup', async (data: { powerUpType: string; params: any }) => {
     try {
       // Rate limiting
       if (!RateLimiter.checkLimit(socket.id, 'execute-powerup', 3, 5000)) { // 3 per 5 seconds
@@ -1103,7 +1103,7 @@ export function registerGameEvents(socket: Socket, io: Server) {
 
       console.log('Execute power-up request:', data);
       
-      const context = getPlayerGameContext(socket.id);
+      const context = await getPlayerGameContext(socket.id);
       if (!context) {
         socket.emit('execute-powerup-response', {
           success: false,
