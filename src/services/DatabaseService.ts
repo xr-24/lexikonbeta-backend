@@ -1,5 +1,4 @@
 import { Pool } from 'pg';
-import Redis from 'ioredis';
 import type { Room, RoomPlayer } from '../types/room';
 
 interface DbRoom {
@@ -45,7 +44,6 @@ interface PlayerSession {
 
 export class DatabaseService {
   private pg: Pool;
-  private redis: Redis;
 
   constructor() {
     this.pg = new Pool({
@@ -56,32 +54,16 @@ export class DatabaseService {
       ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
     });
 
-    this.redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
-      maxRetriesPerRequest: 2,
-      lazyConnect: true,
-      connectTimeout: 10000,
-      commandTimeout: 5000,
-      enableOfflineQueue: false,
-    });
-
-    // Test connections but don't block startup
-    this.testConnections().catch(error => {
-      console.error('⚠️  Database connections failed - server will start but features may be limited:', error);
+    // Test connection but don't block startup
+    this.testConnection().catch(error => {
+      console.error('⚠️  Database connection failed - server will start but features may be limited:', error);
     });
   }
 
-  private async testConnections(): Promise<void> {
+  private async testConnection(): Promise<void> {
     try {
       const pgResult = await this.pg.query('SELECT NOW()');
       console.log('✅ DatabaseService: PostgreSQL connected');
-
-      try {
-        await this.redis.ping();
-        console.log('✅ DatabaseService: Redis connected');
-      } catch (redisError) {
-        console.warn('⚠️  Redis not available, running without cache:', redisError);
-        // Game will work without Redis, just slower
-      }
     } catch (error) {
       console.error('❌ DatabaseService connection failed:', error);
       throw error;
@@ -127,15 +109,6 @@ export class DatabaseService {
       
       const fullRoom = await this.getRoomById(dbRoom.id);
       
-      // Cache in Redis for fast access (safe)
-      try {
-        await this.redis.setex(`room:${dbRoom.id}`, 3600, JSON.stringify(fullRoom));
-        await this.redis.setex(`room:code:${room.code}`, 3600, dbRoom.id);
-      } catch (redisError) {
-        console.warn('Redis cache write failed:', redisError);
-        // Continue without caching
-      }
-      
       return fullRoom!;
       
     } catch (error) {
@@ -147,17 +120,6 @@ export class DatabaseService {
   }
 
   async getRoomById(roomId: string): Promise<Room | null> {
-    // Try Redis cache first (with fallback)
-    try {
-      const cached = await this.redis.get(`room:${roomId}`);
-      if (cached) {
-        return JSON.parse(cached);
-      }
-    } catch (redisError) {
-      console.warn('Redis cache miss:', redisError);
-      // Continue to PostgreSQL fallback
-    }
-
     // Fallback to PostgreSQL
     const result = await this.pg.query(
       `SELECT r.*, 
@@ -189,29 +151,10 @@ export class DatabaseService {
 
     const room = this.mapDbRoomToRoom(result.rows[0]);
     
-    // Cache for future requests (safe)
-    try {
-      await this.redis.setex(`room:${roomId}`, 1800, JSON.stringify(room));
-    } catch (redisError) {
-      console.warn('Redis cache write failed:', redisError);
-      // Continue without caching
-    }
-    
     return room;
   }
 
   async getRoomByCode(code: string): Promise<Room | null> {
-    // Try Redis cache first (with fallback)
-    try {
-      const cachedRoomId = await this.redis.get(`room:code:${code}`);
-      if (cachedRoomId) {
-        return this.getRoomById(cachedRoomId);
-      }
-    } catch (redisError) {
-      console.warn('Redis cache miss for room code:', redisError);
-      // Continue to PostgreSQL fallback
-    }
-
     // Fallback to PostgreSQL
     const result = await this.pg.query(
       `SELECT r.*, 
@@ -243,15 +186,6 @@ export class DatabaseService {
 
     const room = this.mapDbRoomToRoom(result.rows[0]);
     
-    // Cache for future requests (safe)
-    try {
-      await this.redis.setex(`room:${room.id}`, 1800, JSON.stringify(room));
-      await this.redis.setex(`room:code:${code}`, 1800, room.id);
-    } catch (redisError) {
-      console.warn('Redis cache write failed:', redisError);
-      // Continue without caching
-    }
-    
     return room;
   }
 
@@ -272,9 +206,6 @@ export class DatabaseService {
         player.joinedAt
       ]
     );
-    
-    // Invalidate room cache
-    await this.redis.del(`room:${roomId}`);
   }
 
   async updatePlayerConnection(playerId: string, socketId: string | null, isConnected: boolean): Promise<void> {
@@ -285,11 +216,6 @@ export class DatabaseService {
        RETURNING room_id`,
       [playerId, socketId, isConnected]
     );
-    
-    // Invalidate room cache
-    if (result.rows.length > 0) {
-      await this.redis.del(`room:${result.rows[0].room_id}`);
-    }
   }
 
   async updatePlayerColor(playerId: string, color: string): Promise<void> {
@@ -300,11 +226,6 @@ export class DatabaseService {
        RETURNING room_id`,
       [playerId, color]
     );
-    
-    // Invalidate room cache
-    if (result.rows.length > 0) {
-      await this.redis.del(`room:${result.rows[0].room_id}`);
-    }
   }
 
   async updatePlayerIntercessions(playerId: string, intercessions: string[]): Promise<void> {
@@ -315,11 +236,6 @@ export class DatabaseService {
        RETURNING room_id`,
       [playerId, JSON.stringify(intercessions)]
     );
-    
-    // Invalidate room cache
-    if (result.rows.length > 0) {
-      await this.redis.del(`room:${result.rows[0].room_id}`);
-    }
   }
 
   async removePlayerFromRoom(playerId: string): Promise<string | null> {
@@ -330,7 +246,6 @@ export class DatabaseService {
     
     if (result.rows.length > 0) {
       const roomId = result.rows[0].room_id;
-      await this.redis.del(`room:${roomId}`);
       return roomId;
     }
     
@@ -371,9 +286,6 @@ export class DatabaseService {
       );
       
       await client.query('COMMIT');
-      
-      // Invalidate cache
-      await this.redis.del(`room:${roomId}`);
       
       return this.getRoomById(roomId);
       
@@ -451,16 +363,10 @@ export class DatabaseService {
       'DELETE FROM rooms WHERE expires_at < NOW() RETURNING id, code'
     );
     
-    // Clean up Redis cache
-    for (const room of result.rows) {
-      await this.redis.del(`room:${room.id}`, `room:code:${room.code}`);
-    }
-    
     console.log(`🧹 Cleaned up ${result.rows.length} expired rooms`);
   }
 
   async close(): Promise<void> {
     await this.pg.end();
-    await this.redis.quit();
   }
 } 
