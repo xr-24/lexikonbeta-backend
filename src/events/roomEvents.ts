@@ -195,6 +195,9 @@ export function registerRoomEvents(socket: Socket, io: Server) {
           intercessionSelectionStarted: result.room.intercessionSelectionStarted
         });
         
+        // Join the socket to the room
+        socket.join(result.room.id);
+        
         // Check if this is a reconnection to an active game
         if (result.room.isStarted) {
           console.log('🎮 Game is active, retrieving game state from GameService...');
@@ -203,8 +206,8 @@ export function registerRoomEvents(socket: Socket, io: Server) {
           const pendingTiles = gameService.getPendingTiles(result.room.id);
           
           if (gameState) {
-            console.log('🎮 Found active game state, sending game-started event');
-            // Send game state to reconnecting player
+            console.log('🎮 Found active game state, sending game-started event (not room-joined)');
+            // Send game state to reconnecting player - don't send room-joined for active games
             socket.emit('game-started', {
               success: true,
               gameState: gameState,
@@ -212,17 +215,20 @@ export function registerRoomEvents(socket: Socket, io: Server) {
             });
           } else {
             console.log('⚠️ Room is marked as started but no game state found in GameService');
+            // Fallback to room-joined if no game state
+            socket.emit('room-joined', {
+              success: true,
+              room: result.room
+            });
           }
+        } else {
+          // Game not started, send normal room-joined event
+          console.log('🎮 Game not started, sending room-joined event');
+          socket.emit('room-joined', {
+            success: true,
+            room: result.room
+          });
         }
-        
-        // Join the socket to the room
-        socket.join(result.room.id);
-        
-        // Send success response to the joiner
-        socket.emit('room-joined', {
-          success: true,
-          room: result.room
-        });
         
         // Broadcast room update to all players in the room
         io.to(result.room.id).emit('room-updated', result.room);
