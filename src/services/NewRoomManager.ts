@@ -135,6 +135,12 @@ export class NewRoomManager {
       const existingPlayer = room.players.find(p => p.name === request.playerName);
       if (existingPlayer) {
         console.log('🔄 Found existing player in room, updating socket ID:', existingPlayer.name);
+        console.log('🔄 Room state before reconnection:', {
+          id: room.id,
+          isStarted: room.isStarted,
+          hasGameState: !!room.gameState,
+          playerCount: room.players.length
+        });
         
         // Update the existing player's socket ID
         await this.db.updatePlayerConnection(existingPlayer.id, playerSocketId, true);
@@ -145,6 +151,13 @@ export class NewRoomManager {
         console.log(`✅ Player ${request.playerName} reconnected to existing room ${request.roomCode}`);
         
         const updatedRoom = await this.db.getRoomById(room.id);
+        console.log('🔄 Room state after database fetch:', {
+          id: updatedRoom?.id,
+          isStarted: updatedRoom?.isStarted,
+          hasGameState: !!updatedRoom?.gameState,
+          playerCount: updatedRoom?.players.length
+        });
+        
         return {
           success: true,
           room: this.getRoomInfoFromRoom(updatedRoom!)

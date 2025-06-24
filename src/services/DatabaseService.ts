@@ -149,7 +149,24 @@ export class DatabaseService {
 
     if (result.rows.length === 0) return null;
 
-    const room = this.mapDbRoomToRoom(result.rows[0]);
+    const dbRow = result.rows[0];
+    console.log('🔍 Database room data for ID', roomId, ':', {
+      id: dbRow.id,
+      code: dbRow.code,
+      is_started: dbRow.is_started,
+      has_game_state: !!dbRow.game_state,
+      intercession_selection_started: dbRow.intercession_selection_started
+    });
+
+    const room = this.mapDbRoomToRoom(dbRow);
+    
+    console.log('🔍 Mapped room data:', {
+      id: room.id,
+      code: room.code,
+      isStarted: room.isStarted,
+      hasGameState: !!room.gameState,
+      intercessionSelectionStarted: room.intercessionSelectionStarted
+    });
     
     return room;
   }

@@ -195,6 +195,26 @@ export function registerRoomEvents(socket: Socket, io: Server) {
           intercessionSelectionStarted: result.room.intercessionSelectionStarted
         });
         
+        // Check if this is a reconnection to an active game
+        if (result.room.isStarted) {
+          console.log('🎮 Game is active, retrieving game state from GameService...');
+          // Get the game state from GameService
+          const gameState = gameService.getGameState(result.room.id);
+          const pendingTiles = gameService.getPendingTiles(result.room.id);
+          
+          if (gameState) {
+            console.log('🎮 Found active game state, sending game-started event');
+            // Send game state to reconnecting player
+            socket.emit('game-started', {
+              success: true,
+              gameState: gameState,
+              pendingTiles: pendingTiles
+            });
+          } else {
+            console.log('⚠️ Room is marked as started but no game state found in GameService');
+          }
+        }
+        
         // Join the socket to the room
         socket.join(result.room.id);
         
