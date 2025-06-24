@@ -63,7 +63,10 @@ export class DatabaseService {
       enableOfflineQueue: false,
     });
 
-    this.testConnections();
+    // Test connections but don't block startup
+    this.testConnections().catch(error => {
+      console.error('⚠️  Database connections failed - server will start but features may be limited:', error);
+    });
   }
 
   private async testConnections(): Promise<void> {
