@@ -275,8 +275,10 @@ export class NewRoomManager {
 
       // Check if game can start (intercessions validation)
       const canStartResult = await this.canStartGame(playerInfo.roomId);
+      console.log('🎯 Can start game result:', canStartResult);
       if (!canStartResult.canStart) {
         if (canStartResult.reason === 'Not all players have selected intercessions') {
+          console.log('🎯 Setting intercession selection started flag');
           // Set intercession selection started flag
           await this.db.updateRoom(playerInfo.roomId, {
             intercessionSelectionStarted: true
@@ -562,9 +564,19 @@ export class NewRoomManager {
         return { canStart: false, reason: 'Need at least 2 players' };
       }
 
+      console.log('🎯 Checking player intercessions:', room.players.map(p => ({
+        id: p.id,
+        name: p.name,
+        isAI: p.isAI,
+        selectedIntercessions: p.selectedIntercessions,
+        hasSelected: p.selectedIntercessions && p.selectedIntercessions.length > 0
+      })));
+
       const allPlayersSelected = room.players.every(p => 
         p.isAI || (p.selectedIntercessions && p.selectedIntercessions.length > 0)
       );
+
+      console.log('🎯 All players selected intercessions:', allPlayersSelected);
 
       if (!allPlayersSelected) {
         return { canStart: false, reason: 'Not all players have selected intercessions' };

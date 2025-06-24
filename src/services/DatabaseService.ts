@@ -340,11 +340,38 @@ export class DatabaseService {
 
   // Utility Methods
   private mapDbRoomToRoom(dbRow: any): Room {
+    // Process players to properly parse selectedIntercessions from JSON
+    const players = Array.isArray(dbRow.players) ? dbRow.players.map((player: any) => {
+      let selectedIntercessions = null;
+      
+      // Parse selectedIntercessions if it exists and is a string
+      if (player.selectedIntercessions) {
+        try {
+          if (typeof player.selectedIntercessions === 'string') {
+            selectedIntercessions = JSON.parse(player.selectedIntercessions);
+          } else if (Array.isArray(player.selectedIntercessions)) {
+            selectedIntercessions = player.selectedIntercessions;
+          }
+        } catch (error) {
+          console.warn('Failed to parse selectedIntercessions for player:', player.id, error);
+          selectedIntercessions = null;
+        }
+      }
+      
+      return {
+        ...player,
+        selectedIntercessions,
+        // Add compatibility fields for intercession checking
+        intercessionsSelected: selectedIntercessions && selectedIntercessions.length > 0,
+        hasSelectedIntercessions: selectedIntercessions && selectedIntercessions.length > 0
+      };
+    }) : [];
+
     return {
       id: dbRow.id,
       code: dbRow.code,
       hostId: dbRow.host_player_id,
-      players: Array.isArray(dbRow.players) ? dbRow.players : [],
+      players,
       isStarted: dbRow.is_started,
       intercessionSelectionStarted: dbRow.intercession_selection_started,
       createdAt: dbRow.created_at,
