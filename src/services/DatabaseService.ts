@@ -234,7 +234,7 @@ export class DatabaseService {
        SET selected_intercessions = $2
        WHERE id = $1
        RETURNING room_id`,
-      [playerId, JSON.stringify(intercessions)]
+      [playerId, intercessions]
     );
   }
 
@@ -344,12 +344,14 @@ export class DatabaseService {
     const players = Array.isArray(dbRow.players) ? dbRow.players.map((player: any) => {
       let selectedIntercessions = null;
       
-      // Parse selectedIntercessions if it exists and is a string
+      // Parse selectedIntercessions - handle both JSON strings and PostgreSQL arrays
       if (player.selectedIntercessions) {
         try {
           if (typeof player.selectedIntercessions === 'string') {
+            // Legacy JSON string format
             selectedIntercessions = JSON.parse(player.selectedIntercessions);
           } else if (Array.isArray(player.selectedIntercessions)) {
+            // PostgreSQL array format (current)
             selectedIntercessions = player.selectedIntercessions;
           }
         } catch (error) {
