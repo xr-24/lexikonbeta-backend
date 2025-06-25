@@ -395,11 +395,36 @@ export class NewRoomManager {
 
   async clearSession(ip: string): Promise<void> {
     try {
-      // Clear session from database
+      // Clear session from database by IP
       await this.db.clearPlayerSessionByIP(ip);
       console.log(`📱 Session cleared for IP: ${ip}`);
     } catch (error) {
       console.error('Error clearing session:', error);
+    }
+  }
+
+  async clearSessionByFingerprint(fingerprint: string): Promise<void> {
+    try {
+      // Clear session from database by browser fingerprint
+      await this.db.clearPlayerSessionByFingerprint(fingerprint);
+      console.log(`📱 Session cleared for fingerprint: ${fingerprint.substring(0, 8)}`);
+    } catch (error) {
+      console.error('Error clearing session by fingerprint:', error);
+    }
+  }
+
+  async clearSessionCompletely(ip: string, fingerprint?: string): Promise<void> {
+    try {
+      // Clear session from database by both IP and fingerprint
+      await this.db.clearPlayerSessionByIP(ip);
+      console.log(`📱 Session cleared for IP: ${ip}`);
+      
+      if (fingerprint) {
+        await this.db.clearPlayerSessionByFingerprint(fingerprint);
+        console.log(`📱 Session cleared for fingerprint: ${fingerprint.substring(0, 8)}`);
+      }
+    } catch (error) {
+      console.error('Error clearing session completely:', error);
     }
   }
 

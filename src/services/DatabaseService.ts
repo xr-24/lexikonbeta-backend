@@ -397,6 +397,13 @@ export class DatabaseService {
     );
   }
 
+  async clearPlayerSessionByFingerprint(browserFingerprint: string): Promise<void> {
+    await this.pg.query(
+      'DELETE FROM player_sessions WHERE browser_fingerprint = $1',
+      [browserFingerprint]
+    );
+  }
+
   async findSessionByFingerprint(browserFingerprint: string): Promise<PlayerSession | null> {
     const result = await this.pg.query(
       `SELECT ps.*, p.name as player_name, r.code as room_code

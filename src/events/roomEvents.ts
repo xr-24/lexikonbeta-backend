@@ -66,13 +66,22 @@ export function registerRoomEvents(socket: Socket, io: Server) {
   socket.on('clear-session', async () => {
     try {
       const clientIP = socket.handshake.address;
-      await roomManager.clearSession(clientIP);
+      const userAgent = socket.handshake.headers['user-agent'] || '';
+      const acceptLanguage = socket.handshake.headers['accept-language'] || '';
+      
+      // Create browser fingerprint to clear both IP and fingerprint sessions
+      const browserFingerprint = require('crypto')
+        .createHash('md5')
+        .update(userAgent + acceptLanguage)
+        .digest('hex');
+      
+      await roomManager.clearSessionCompletely(clientIP, browserFingerprint);
       
       socket.emit('session-cleared', {
         success: true
       });
       
-      console.log(`Session cleared for IP ${clientIP}`);
+      console.log(`Session completely cleared for IP ${clientIP} and fingerprint ${browserFingerprint.substring(0, 8)}`);
     } catch (error) {
       console.error('Error in clear-session:', error);
       socket.emit('session-cleared', {
@@ -328,8 +337,17 @@ export function registerRoomEvents(socket: Socket, io: Server) {
         
         // Clear the player's session to prevent auto-reconnection
         const clientIP = socket.handshake.address;
-        await roomManager.clearSession(clientIP);
-        console.log(`Session cleared for leaving player at IP: ${clientIP}`);
+        const userAgent = socket.handshake.headers['user-agent'] || '';
+        const acceptLanguage = socket.handshake.headers['accept-language'] || '';
+        
+        // Create browser fingerprint to clear both IP and fingerprint sessions
+        const browserFingerprint = require('crypto')
+          .createHash('md5')
+          .update(userAgent + acceptLanguage)
+          .digest('hex');
+        
+        await roomManager.clearSessionCompletely(clientIP, browserFingerprint);
+        console.log(`Session completely cleared for leaving player at IP: ${clientIP} and fingerprint ${browserFingerprint.substring(0, 8)}`);
         
         // Send confirmation to the leaving player
         socket.emit('room-left', {
