@@ -365,7 +365,7 @@ export class DatabaseService {
        FROM player_sessions ps
        JOIN players p ON ps.player_id = p.id
        JOIN rooms r ON ps.room_id = r.id
-       WHERE ps.ip_address LIKE $1 AND ps.expires_at > NOW()
+       WHERE ps.ip_address::text LIKE $1 AND ps.expires_at > NOW()
        AND ps.created_at > NOW() - INTERVAL '30 minutes'
        ORDER BY ps.created_at DESC
        LIMIT 1`,
