@@ -341,7 +341,8 @@ export class DatabaseService {
   }
 
   async findSessionByIP(ipAddress: string): Promise<PlayerSession | null> {
-    const result = await this.pg.query(
+    // First, try to find exact IP match
+    const exactMatch = await this.pg.query(
       `SELECT ps.*, p.name as player_name, r.code as room_code
        FROM player_sessions ps
        JOIN players p ON ps.player_id = p.id
@@ -352,7 +353,41 @@ export class DatabaseService {
       [ipAddress]
     );
     
-    return result.rows.length > 0 ? result.rows[0] : null;
+    if (exactMatch.rows.length > 0) {
+      return exactMatch.rows[0];
+    }
+    
+    // If no exact match, check for recent sessions from similar IP ranges
+    // This helps with load balancers that rotate IPs
+    const ipPrefix = ipAddress.split('.').slice(0, 3).join('.'); // Get first 3 octets
+    const fallbackMatch = await this.pg.query(
+      `SELECT ps.*, p.name as player_name, r.code as room_code
+       FROM player_sessions ps
+       JOIN players p ON ps.player_id = p.id
+       JOIN rooms r ON ps.room_id = r.id
+       WHERE ps.ip_address LIKE $1 AND ps.expires_at > NOW()
+       AND ps.created_at > NOW() - INTERVAL '30 minutes'
+       ORDER BY ps.created_at DESC
+       LIMIT 1`,
+      [ipPrefix + '%']
+    );
+    
+    if (fallbackMatch.rows.length > 0) {
+      // Update the session with the new IP address
+      await this.pg.query(
+        'UPDATE player_sessions SET ip_address = $1 WHERE id = $2',
+        [ipAddress, fallbackMatch.rows[0].id]
+      );
+      
+      console.log(`🔄 Updated session IP from ${fallbackMatch.rows[0].ip_address} to ${ipAddress} for player ${fallbackMatch.rows[0].player_name}`);
+      
+      return {
+        ...fallbackMatch.rows[0],
+        ip_address: ipAddress
+      };
+    }
+    
+    return null;
   }
 
   async clearPlayerSessionByIP(ipAddress: string): Promise<void> {
@@ -360,6 +395,21 @@ export class DatabaseService {
       'DELETE FROM player_sessions WHERE ip_address = $1',
       [ipAddress]
     );
+  }
+
+  async findSessionByFingerprint(browserFingerprint: string): Promise<PlayerSession | null> {
+    const result = await this.pg.query(
+      `SELECT ps.*, p.name as player_name, r.code as room_code
+       FROM player_sessions ps
+       JOIN players p ON ps.player_id = p.id
+       JOIN rooms r ON ps.room_id = r.id
+       WHERE ps.browser_fingerprint = $1 AND ps.expires_at > NOW()
+       ORDER BY ps.created_at DESC
+       LIMIT 1`,
+      [browserFingerprint]
+    );
+    
+    return result.rows.length > 0 ? result.rows[0] : null;
   }
 
   // Utility Methods

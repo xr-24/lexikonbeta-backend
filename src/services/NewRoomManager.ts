@@ -27,7 +27,7 @@ export class NewRoomManager {
     return Math.floor(100000 + Math.random() * 900000).toString();
   }
 
-  async createRoom(hostSocketId: string, request: CreateRoomRequest, ip?: string): Promise<{ success: boolean; room?: RoomInfo; error?: string }> {
+  async createRoom(hostSocketId: string, request: CreateRoomRequest, ip?: string, browserFingerprint?: string): Promise<{ success: boolean; room?: RoomInfo; error?: string }> {
     try {
       // Check if player is already in a room
       if (this.socketToPlayer.has(hostSocketId)) {
@@ -66,7 +66,7 @@ export class NewRoomManager {
 
       // Create session if IP is provided
       if (ip) {
-        await this.db.createPlayerSession(hostPlayer.id, room.id, ip);
+        await this.db.createPlayerSession(hostPlayer.id, room.id, ip, browserFingerprint);
         console.log(`📱 Session created for host IP ${ip}: ${request.playerName} in room ${roomCode}`);
       }
 
@@ -83,7 +83,7 @@ export class NewRoomManager {
     }
   }
 
-  async joinRoom(playerSocketId: string, request: JoinRoomRequest, ip?: string): Promise<{ success: boolean; room?: RoomInfo; error?: string }> {
+  async joinRoom(playerSocketId: string, request: JoinRoomRequest, ip?: string, browserFingerprint?: string): Promise<{ success: boolean; room?: RoomInfo; error?: string }> {
     try {
       console.log('🔍 NewRoomManager.joinRoom called with:', { playerSocketId, request });
       
@@ -192,7 +192,7 @@ export class NewRoomManager {
 
       // Create session if IP is provided
       if (ip) {
-        await this.db.createPlayerSession(newPlayer.id, room.id, ip);
+        await this.db.createPlayerSession(newPlayer.id, room.id, ip, browserFingerprint);
         console.log(`📱 Session created for player IP ${ip}: ${request.playerName} in room ${request.roomCode}`);
       }
 
@@ -387,6 +387,10 @@ export class NewRoomManager {
   // Session management methods
   async checkSessionByIP(ip: string): Promise<any> {
     return await this.db.findSessionByIP(ip);
+  }
+
+  async checkSessionByFingerprint(fingerprint: string): Promise<any> {
+    return await this.db.findSessionByFingerprint(fingerprint);
   }
 
   async clearSession(ip: string): Promise<void> {

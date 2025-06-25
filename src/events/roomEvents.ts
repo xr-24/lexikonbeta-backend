@@ -6,10 +6,19 @@ import type { CreateRoomRequest, JoinRoomRequest, SelectIntercessionsRequest } f
 
 export function registerRoomEvents(socket: Socket, io: Server) {
   // Check for existing session
-  socket.on('check-session', async () => {
+  socket.on('check-session', async (data) => {
     try {
       const clientIP = socket.handshake.address;
-      console.log('Session check request from IP:', clientIP);
+      const userAgent = socket.handshake.headers['user-agent'] || '';
+      const acceptLanguage = socket.handshake.headers['accept-language'] || '';
+      
+      // Create a simple browser fingerprint
+      const browserFingerprint = require('crypto')
+        .createHash('md5')
+        .update(userAgent + acceptLanguage)
+        .digest('hex');
+      
+      console.log('Session check request from IP:', clientIP, 'fingerprint:', browserFingerprint.substring(0, 8));
       
       const session = await roomManager.checkSessionByIP(clientIP);
       
@@ -25,10 +34,24 @@ export function registerRoomEvents(socket: Socket, io: Server) {
         });
         console.log(`Session found for IP ${clientIP}: ${session.player_name || session.playerName} in room ${session.room_code || session.roomCode}`);
       } else {
-        socket.emit('session-found', {
-          success: false,
-          message: 'No active session found'
-        });
+        // Try to find session by browser fingerprint as fallback
+        const fingerprintSession = await roomManager.checkSessionByFingerprint?.(browserFingerprint);
+        if (fingerprintSession) {
+          console.log('🔍 Session found by fingerprint, updating IP');
+          socket.emit('session-found', {
+            success: true,
+            session: {
+              roomCode: fingerprintSession.room_code || fingerprintSession.roomCode,
+              playerName: fingerprintSession.player_name || fingerprintSession.playerName,
+              playerId: fingerprintSession.player_id || fingerprintSession.playerId
+            }
+          });
+        } else {
+          socket.emit('session-found', {
+            success: false,
+            message: 'No active session found'
+          });
+        }
       }
     } catch (error) {
       console.error('Error in check-session:', error);
@@ -97,7 +120,16 @@ export function registerRoomEvents(socket: Socket, io: Server) {
       };
       
       const clientIP = socket.handshake.address;
-      const result = await roomManager.createRoom(socket.id, sanitizedData, clientIP);
+      const userAgent = socket.handshake.headers['user-agent'] || '';
+      const acceptLanguage = socket.handshake.headers['accept-language'] || '';
+      
+      // Create a simple browser fingerprint
+      const browserFingerprint = require('crypto')
+        .createHash('md5')
+        .update(userAgent + acceptLanguage)
+        .digest('hex');
+      
+      const result = await roomManager.createRoom(socket.id, sanitizedData, clientIP, browserFingerprint);
       
       if (result.success && result.room) {
         // Join the socket to the room
@@ -183,7 +215,16 @@ export function registerRoomEvents(socket: Socket, io: Server) {
       
       console.log('🔍 Attempting to join room with sanitized data:', sanitizedData);
       const clientIP = socket.handshake.address;
-      const result = await roomManager.joinRoom(socket.id, sanitizedData, clientIP);
+      const userAgent = socket.handshake.headers['user-agent'] || '';
+      const acceptLanguage = socket.handshake.headers['accept-language'] || '';
+      
+      // Create a simple browser fingerprint
+      const browserFingerprint = require('crypto')
+        .createHash('md5')
+        .update(userAgent + acceptLanguage)
+        .digest('hex');
+      
+      const result = await roomManager.joinRoom(socket.id, sanitizedData, clientIP, browserFingerprint);
       console.log('🔍 Room join result:', { success: result.success, error: result.error });
       
       if (result.success && result.room) {
