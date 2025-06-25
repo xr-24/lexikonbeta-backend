@@ -372,11 +372,15 @@ export class GameService {
           if (updatedPlayer.isAI) {
             // AI gets 20 HP healing per evocation (max 250 HP)
             updatedPlayer.hp = Math.min(250, updatedPlayer.hp + 20);
-            console.log(`AI ${updatedPlayer.name} collected evocation and healed 20 HP (${updatedPlayer.hp - 20} -> ${updatedPlayer.hp})`);
           } else {
-            // Human gets evocation ability - convert PowerUp to Evocation
-            // Since board now spawns evocations stored as powerUps, treat them as evocations
-            const evocation = powerUp as any; // The board stores evocations in powerUp field
+            // Human gets evocation ability - properly convert PowerUp to Evocation and add to evocations array
+            const evocation = {
+              id: `evocation-${powerUp.type.toLowerCase()}-${Date.now()}-${Math.random()}`,
+              type: powerUp.type as any, // PowerUp.type should match EvocationType for board evocations
+              name: powerUp.name,
+              description: powerUp.description,
+              color: '#8B4513' // Default color, will be overridden by proper evocation definition
+            };
             updatedPlayer = EvocationManager.collectEvocationFromBoard(updatedPlayer, evocation);
           }
         });
@@ -1183,6 +1187,56 @@ export class GameService {
       return { success: false, errors: ['Power-up tile not found'] };
     }
 
+    console.log(`Attempting to activate powerup tile: ${powerUpTile.powerUpType} (ID: ${tileId})`);
+
+    // Check if this is actually an evocation tile disguised as a powerup tile
+    if (tileId.includes('evocation')) {
+      console.log(`Detected evocation tile: ${tileId}, redirecting to evocation system`);
+      // Extract the evocation type from the tile ID (e.g., "powerup-tile-evocation-orobas-..." -> "OROBAS")
+      const evocationTypeMatch = tileId.match(/evocation-([a-z]+)/i);
+      if (evocationTypeMatch) {
+        const evocationType = evocationTypeMatch[1].toUpperCase();
+        console.log(`Extracted evocation type: ${evocationType}`);
+        
+        // Remove the tile from player's tiles since we're converting it to an evocation
+        const updatedTiles = player.tiles.filter(t => t.id !== tileId);
+        
+        // Create the evocation object
+        const evocation = {
+          id: `evocation-${evocationType.toLowerCase()}-${Date.now()}-${Math.random()}`,
+          type: evocationType as any,
+          name: `Invocation of ${evocationType}`,
+          description: this.getEvocationDescription(evocationType as any),
+          color: '#8B4513'
+        };
+        
+        // Add evocation to player's evocations array
+        const updatedPlayer = {
+          ...player,
+          tiles: updatedTiles,
+          evocations: [...player.evocations, evocation]
+        };
+        
+        // Update game state
+        const updatedPlayers = gameState.players.map(p =>
+          p.id === playerId ? updatedPlayer : p
+        );
+        
+        const updatedGameState = {
+          ...gameState,
+          players: updatedPlayers
+        };
+        
+        this.games.set(gameId, updatedGameState);
+        
+        return { success: true, errors: [] };
+      } else {
+        console.error(`Could not extract evocation type from tile ID: ${tileId}`);
+        return { success: false, errors: ['Invalid evocation tile ID'] };
+      }
+    }
+
+    // Handle regular powerup tiles
     const result = PowerUpManager.activatePowerUpTile(player, tileId);
     
     if (result.success) {
@@ -1217,6 +1271,24 @@ export class GameService {
     } else {
       return { success: false, errors: [result.error || 'Failed to activate power-up tile'] };
     }
+  }
+
+  private getEvocationDescription(type: string): string {
+    const descriptions: Record<string, string> = {
+      'OROBAS': 'Allows unlimited reuse of letters from your rack for one turn.',
+      'BUNE': 'Discard your current rack and draw a fresh one, guaranteed vowels.',
+      'GREMORY': 'Swap racks entirely with your opponent.',
+      'ASTAROTH': 'Adds one temporary wildcard tile (blank) to your rack.',
+      'AIM': 'Force your opponent to discard two tiles from their rack.',
+      'ANDROMALIUS': 'Steal one tile from your opponent\'s rack to use on your turn.',
+      'VALEFOR': 'The next word you spell deals 4x damage.',
+      'DANTALION': 'Duplicate one tile in your rack.',
+      'FURFUR': 'Immediately take an additional turn after your current one.',
+      'FORNEUS': 'Freeze a tile on the board, preventing opponents from building on it next turn.',
+      'MURMUR': 'Lock three random opponent tiles, preventing their use next turn.',
+      'HAAGENTI': 'Temporarily expand your rack to 10 tiles for your current turn.'
+    };
+    return descriptions[type] || 'Unknown evocation effect.';
   }
 
   clearActivePowerUp(gameId: string, playerId: string): void {
