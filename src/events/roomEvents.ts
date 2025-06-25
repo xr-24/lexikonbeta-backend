@@ -326,6 +326,11 @@ export function registerRoomEvents(socket: Socket, io: Server) {
         // Leave the socket room
         socket.leave(result.roomId);
         
+        // Clear the player's session to prevent auto-reconnection
+        const clientIP = socket.handshake.address;
+        await roomManager.clearSession(clientIP);
+        console.log(`Session cleared for leaving player at IP: ${clientIP}`);
+        
         // Send confirmation to the leaving player
         socket.emit('room-left', {
           success: true
